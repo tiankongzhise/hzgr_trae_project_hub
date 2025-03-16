@@ -1,0 +1,13 @@
+[project]
+name = "keyword-classfiy"
+version = "0.1.0"
+description = "关键词分类工具，支持复杂的分词规则匹配"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "lark-parser>=0.12.0",
+    "openpyxl>=3.1.5",
+    "pandas>=2.0.3",
+    "pyqt5~=5.15.11"
+]
+
