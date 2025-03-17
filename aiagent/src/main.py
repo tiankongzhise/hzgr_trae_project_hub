@@ -29,7 +29,7 @@ def setup_browser():
     return playwright, browser, context, page
 
 
-def login_process(page: Page) -> Optional[Page]:
+def login_process(page: Page) -> Optional[LoginPage]:
     """登录流程
     
     Args:
@@ -42,28 +42,44 @@ def login_process(page: Page) -> Optional[Page]:
         login_page = LoginPage(page)
         login_page.navigate(Config.LOGIN["url"])
         login_page.login(Config.LOGIN["username"], Config.LOGIN["password"])
-        bcnt_page = login_page.click_bcnt_link()
-        return bcnt_page
+        return login_page
     except Exception as e:
         logger.error(f"登录过程失败: {e}")
         raise
 
+def navigate_to_account_page(login_page:LoginPage,account_name:str)->Optional[Page]:
+    """导航到账户页面
 
-def navigate_to_agent_creation(bcnt_page: Page) -> Optional[Page]:
+    Args:
+        login_page: 登录页面对象
+        account_name: 账户名称
+
+    Returns:
+        Page:账户页面
+    """
+    try:
+        account_page = login_page.click_account_link(account_name)
+        return account_page
+    except Exception as e:
+        logger.error(f"导航到账户页面失败: {e}")
+        raise
+
+
+def navigate_to_agent_creation(account_page: Page) -> Optional[Page]:
     """导航到智能体创建页面
     
     Args:
-        bcnt_page: BCNT页面对象
+        account_page: 账户页面对象
         
     Returns:
         智能体创建页面
     """
     try:
-        qiaocang_page = QiaocangPage(bcnt_page)
-        agent_page = qiaocang_page.click_qiaocang()
-        qiaocang_page = QiaocangPage(agent_page) #noqa
-        qiaocang_page.scroll_and_refresh()
-        qiaocang_page.navigate_to_aiagent(Config.AGENT_CREATION["url"])
+        qiaocang_page = QiaocangPage(account_page)
+        # agent_page = qiaocang_page.click_qiaocang()
+        # qiaocang_page = QiaocangPage(agent_page) #noqa
+        # qiaocang_page.scroll_and_refresh()
+        qiaocang_page.navigate_to_aiagent(Config.AGENT_CREATION["url"].format(user_id = ))
         qiaocang_page.scroll_multiple_times(3)
         return agent_page
     except Exception as e:
@@ -100,13 +116,21 @@ def main():
         playwright, browser, context, page = setup_browser()
         
         # 登录流程
-        bcnt_page = login_process(page)
-        if not bcnt_page:
-            logger.error("登录失败，无法获取BCNT页面")
+        login_page = login_process(page)
+        if not login_page:
+            logger.error("登录失败，无法获取登录页面对象")
+            return
+        account_list = Config.ACCOUNT_LIST
+        account = account_list[0]
+        # 导航到账户页面
+        account_page = navigate_to_account_page(login_page,account)
+        if not account_page:
+            logger.error("导航失败，无法获取账户页面")
             return
         
+        
         # 导航到智能体创建页面
-        agent_page = navigate_to_agent_creation(bcnt_page)
+        agent_page = navigate_to_agent_creation(account_page)
         if not agent_page:
             logger.error("导航失败，无法获取智能体创建页面")
             return

@@ -19,7 +19,7 @@ class LoginPage:
         self.username_input = page.get_by_role("textbox", name="请输入账号")
         self.password_input = page.get_by_role("textbox", name="请输入密码")
         self.login_button = page.get_by_role("button", name="登录")
-        self.bcnt_link = page.get_by_text("金蛛-BCNT")
+        
     
     def navigate(self, url: str) -> None:
         """导航到登录页面
@@ -61,16 +61,16 @@ class LoginPage:
             self.logger.error(f"登录失败: {e}")
             raise
     
-    def click_bcnt_link(self) -> Optional[Page]:
-        """点击金蛛-BCNT链接，打开新页面
+    def click_account_link(self,account_name:str) -> Optional[Page]:
+        """点击账户名称链接，打开新页面
         
         Returns:
             新打开的页面对象
         """
-        self.logger.info("点击金蛛-BCNT链接")
+        self.logger.info(f"点击{account_name}链接")
         try:
             with self.page.expect_popup() as page_info:
-                self.bcnt_link.click()
+                self.page.get_by_text(account_name).first.click()
             return page_info.value
         except Exception as e:
             self.logger.error(f"点击金蛛-BCNT链接失败: {e}")
