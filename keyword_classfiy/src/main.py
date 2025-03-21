@@ -5,6 +5,7 @@ import tkinter as tk
 from tkinter import ttk, scrolledtext, filedialog, messagebox
 import pandas as pd
 import re
+import tomli
 from pathlib import Path
 
 from keyword_classifier import KeywordClassifier
@@ -13,7 +14,9 @@ from excel_handler import ExcelHandler
 class MainWindow(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("关键词分类工具")
+        # 读取版本号
+        self.version = self.get_version()
+        self.title(f"关键词分类工具 v{self.version}")
         self.geometry("900x700")
         
         self.excel_handler = ExcelHandler()
@@ -24,6 +27,28 @@ class MainWindow(tk.Tk):
         self.compare_files = []  # 存储要比较的文件路径
         
         self.init_ui()
+    
+    def get_version(self):
+        """从pyproject.toml文件中读取版本号"""
+        try:
+            # 获取项目根目录路径
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            project_root = os.path.dirname(current_dir)
+            toml_path = os.path.join(project_root, 'pyproject.toml')
+            
+            # 如果找不到文件，尝试向上一级目录查找
+            if not os.path.exists(toml_path):
+                project_root = os.path.dirname(project_root)
+                toml_path = os.path.join(project_root, 'pyproject.toml')
+            
+            # 读取TOML文件
+            with open(toml_path, 'rb') as f:
+                data = tomli.load(f)
+                version = data.get('project', {}).get('version', '未知')
+                return version
+        except Exception as e:
+            print(f"读取版本号失败: {str(e)}")
+            return "未知"
     
     def init_ui(self):
         # 创建一个笔记本控件，用于切换不同功能页面
@@ -112,6 +137,10 @@ class MainWindow(tk.Tk):
         
         self.status_label = ttk.Label(status_frame, text="就绪")
         self.status_label.pack(anchor=tk.W)
+        
+        # 版本号显示
+        version_label = ttk.Label(status_frame, text=f"版本: v{self.version}", foreground="gray")
+        version_label.pack(anchor=tk.E, side=tk.RIGHT)
         
         # 错误信息显示区域
         error_frame = ttk.LabelFrame(main_frame, text="错误信息:")
@@ -278,13 +307,19 @@ class MainWindow(tk.Tk):
         else:
             # 从文本框获取规则
             rules = [r.strip() for r in rules_text.split('\n') if r.strip()]
-            # 进一步按逗号分隔
+            # 进一步按逗号分隔并保序去重
             temp_rules = []
             for r in rules:
                 temp_rules.extend([tr.strip() for tr in r.split(',') if tr.strip()])
-            # 使用集合去重
+            # 保序去重
             original_count = len(temp_rules)
-            rules = list(set(temp_rules))
+            seen = set()
+            unique_rules = []
+            for rule in temp_rules:
+                if rule not in seen:
+                    seen.add(rule)
+                    unique_rules.append(rule)
+            rules = unique_rules
             # 如果有去重，在状态栏显示信息
             if original_count > len(rules):
                 self.status_label.config(text=f"规则已自动去重: {original_count} -> {len(rules)}")

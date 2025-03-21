@@ -19,13 +19,15 @@ class ExcelHandler:
                 # 如果没有找到分词规则列，使用第一列
                 rules = df.iloc[:, 0].dropna().astype(str).tolist()
             
-            # 进一步处理规则，按逗号分隔，并去重
+            # 进一步处理规则，按逗号分隔，并保序去重
             result_rules = []
+            seen = set()
             for rule in rules:
-                result_rules.extend([r.strip() for r in rule.split(',') if r.strip()])
-            
-            # 使用集合去重，然后转回列表
-            result_rules = list(set(result_rules))
+                for r in rule.split(','):
+                    r = r.strip()
+                    if r and r not in seen:
+                        seen.add(r)
+                        result_rules.append(r)
             
             return result_rules
         except Exception as e:
@@ -39,8 +41,14 @@ class ExcelHandler:
             # 使用第一列作为关键词列
             keywords = df.iloc[:, 0].dropna().astype(str).tolist()
             
-            # 使用集合去重，然后转回列表
-            keywords = list(set(keywords))
+            # 保序去重
+            seen = set()
+            unique_keywords = []
+            for keyword in keywords:
+                if keyword not in seen:
+                    seen.add(keyword)
+                    unique_keywords.append(keyword)
+            keywords = unique_keywords
             
             return keywords
         except Exception as e:
