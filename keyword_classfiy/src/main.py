@@ -256,8 +256,7 @@ class MainWindow(tk.Tk):
                 # 添加结果
                 results.append({
                     'keyword': keyword,
-                    'matched_rules': '|'.join(matched_rules) if matched_rules else '',
-                    'error': '是' if keyword_error else '否'  # 添加错误标记
+                    'matched_rules': '|'.join(matched_rules) if matched_rules else ''
                 })
                 
                 # 更新进度
