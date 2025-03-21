@@ -589,8 +589,12 @@ class MainWindow(tk.Tk):
                 all_comparison_results.append(file_comparison_result)
             
             # 添加导出结果按钮
-            export_frame = ttk.Frame(self.result_text.master)
-            export_frame.pack(fill=tk.X, padx=5, pady=5, before=self.result_text)
+            # 获取result_frame作为父容器
+            result_frame = self.result_text.master
+            
+            # 创建一个新的Frame作为导出按钮的容器
+            export_frame = ttk.Frame(result_frame)
+            export_frame.pack(fill=tk.X, padx=5, pady=5)
             
             export_btn = ttk.Button(
                 export_frame, 
