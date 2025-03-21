@@ -1,18 +1,17 @@
 import sys
 import os
-from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
-                             QHBoxLayout, QPushButton, QLabel, QTextEdit, 
-                             QFileDialog, QMessageBox)
-from PyQt5.QtCore import Qt
+import time
+import tkinter as tk
+from tkinter import ttk, scrolledtext, filedialog, messagebox
 
 from keyword_classifier import KeywordClassifier
 from excel_handler import ExcelHandler
 
-class MainWindow(QMainWindow):
+class MainWindow(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("关键词分类工具")
-        self.setGeometry(100, 100, 800, 600)
+        self.title("关键词分类工具")
+        self.geometry("800x600")
         
         self.excel_handler = ExcelHandler()
         self.classifier = KeywordClassifier()
@@ -20,46 +19,77 @@ class MainWindow(QMainWindow):
         self.init_ui()
     
     def init_ui(self):
-        central_widget = QWidget()
-        self.setCentralWidget(central_widget)
-        
-        main_layout = QVBoxLayout(central_widget)
+        # 主框架
+        main_frame = ttk.Frame(self, padding="10")
+        main_frame.pack(fill=tk.BOTH, expand=True)
         
         # 规则输入区域
-        rules_layout = QVBoxLayout()
-        rules_label = QLabel("分词规则:")
-        rules_label.setToolTip("规则说明:\n[]内表示精确匹配\n<>表示排除\n|表示或运算\n+表示与运算\n()用于调整优先级\n使用,分隔不同规则")
-        self.rules_text = QTextEdit()
-        self.rules_text.setPlaceholderText("输入分词规则，使用逗号分隔不同规则...")
+        rules_frame = ttk.LabelFrame(main_frame, text="分词规则:")
+        rules_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         
-        rules_layout.addWidget(rules_label)
-        rules_layout.addWidget(self.rules_text)
+        # 添加工具提示
+        tooltip_text = "规则说明:\n[]内表示精确匹配\n<>表示排除\n|表示或运算\n+表示与运算\n()用于调整优先级\n使用,分隔不同规则"
+        tooltip_label = ttk.Label(rules_frame, text="ℹ️", cursor="question_arrow")
+        tooltip_label.pack(anchor=tk.NE, padx=5, pady=5)
+        
+        # 创建工具提示弹出窗口
+        def show_tooltip(event):
+            tooltip = tk.Toplevel(self)
+            tooltip.wm_overrideredirect(True)
+            tooltip.geometry(f"+{event.x_root+10}+{event.y_root+10}")
+            ttk.Label(tooltip, text=tooltip_text, background="#FFFFCC", relief=tk.SOLID, borderwidth=1).pack()
+            tooltip.after(5000, tooltip.destroy)  # 5秒后自动关闭
+            
+        def hide_tooltip(event):
+            for widget in self.winfo_children():
+                if isinstance(widget, tk.Toplevel) and not widget.wm_title():
+                    widget.destroy()
+                    
+        tooltip_label.bind('<Enter>', show_tooltip)
+        tooltip_label.bind('<Leave>', hide_tooltip)
+        
+        # 规则文本框
+        self.rules_text = scrolledtext.ScrolledText(rules_frame, height=10)
+        self.rules_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        self.rules_text.insert(tk.END, "输入分词规则，使用逗号分隔不同规则...")
         
         # 按钮区域
-        buttons_layout = QHBoxLayout()
+        buttons_frame = ttk.Frame(main_frame)
+        buttons_frame.pack(fill=tk.X, padx=5, pady=5)
         
-        self.load_rules_btn = QPushButton("从Excel加载规则")
-        self.load_rules_btn.clicked.connect(self.load_rules_from_excel)
+        self.load_rules_btn = ttk.Button(buttons_frame, text="从Excel加载规则", command=self.load_rules_from_excel)
+        self.load_rules_btn.pack(side=tk.LEFT, padx=5)
         
-        self.load_keywords_btn = QPushButton("加载关键词")
-        self.load_keywords_btn.clicked.connect(self.load_keywords)
+        self.load_keywords_btn = ttk.Button(buttons_frame, text="加载关键词", command=self.load_keywords)
+        self.load_keywords_btn.pack(side=tk.LEFT, padx=5)
         
-        self.classify_btn = QPushButton("开始分类")
-        self.classify_btn.clicked.connect(self.start_classification)
+        self.classify_btn = ttk.Button(buttons_frame, text="开始分类", command=self.start_classification)
+        self.classify_btn.pack(side=tk.LEFT, padx=5)
         
-        buttons_layout.addWidget(self.load_rules_btn)
-        buttons_layout.addWidget(self.load_keywords_btn)
-        buttons_layout.addWidget(self.classify_btn)
+        # 格式提示区域
+        format_frame = ttk.Frame(main_frame)
+        format_frame.pack(fill=tk.X, padx=5, pady=5)
+        
+        format_text = "Excel格式说明: 规则文件需包含'分词规则'列或使用第一列，关键词文件使用第一列作为关键词列"
+        format_label = ttk.Label(format_frame, text=format_text, foreground="blue")
+        format_label.pack(anchor=tk.W)
         
         # 状态区域
-        status_layout = QVBoxLayout()
-        self.status_label = QLabel("就绪")
-        status_layout.addWidget(self.status_label)
+        status_frame = ttk.Frame(main_frame)
+        status_frame.pack(fill=tk.X, padx=5, pady=5)
         
-        # 添加所有布局
-        main_layout.addLayout(rules_layout)
-        main_layout.addLayout(buttons_layout)
-        main_layout.addLayout(status_layout)
+        self.status_label = ttk.Label(status_frame, text="就绪")
+        self.status_label.pack(anchor=tk.W)
+        
+        # 进度区域
+        progress_frame = ttk.Frame(main_frame)
+        progress_frame.pack(fill=tk.X, padx=5, pady=5)
+        
+        self.progress_bar = ttk.Progressbar(progress_frame, orient="horizontal", length=100, mode="determinate")
+        self.progress_bar.pack(fill=tk.X, padx=5, pady=5)
+        
+        self.progress_label = ttk.Label(progress_frame, text="")
+        self.progress_label.pack(anchor=tk.W)
         
         # 初始化数据
         self.keywords = []
@@ -67,39 +97,54 @@ class MainWindow(QMainWindow):
         self.keywords_file_path = ""
     
     def load_rules_from_excel(self):
-        file_path, _ = QFileDialog.getOpenFileName(
-            self, "选择Excel文件", "", "Excel Files (*.xlsx)")
+        file_path = filedialog.askopenfilename(
+            title="选择Excel文件", 
+            filetypes=[("Excel Files", "*.xlsx")])
         
         if file_path:
             try:
                 self.rules_file_path = file_path
                 rules = self.excel_handler.read_rules(file_path)
-                self.rules_text.setText("\n".join(rules))
-                self.status_label.setText(f"已加载 {len(rules)} 条规则")
+                self.rules_text.delete(1.0, tk.END)
+                self.rules_text.insert(tk.END, "\n".join(rules))
+                self.status_label.config(text=f"已加载 {len(rules)} 条规则")
             except Exception as e:
-                QMessageBox.critical(self, "错误", f"加载规则失败: {str(e)}")
+                messagebox.showerror("错误", f"加载规则失败: {str(e)}")
     
     def load_keywords(self):
-        file_path, _ = QFileDialog.getOpenFileName(
-            self, "选择关键词Excel文件", "", "Excel Files (*.xlsx)")
+        file_path = filedialog.askopenfilename(
+            title="选择关键词Excel文件", 
+            filetypes=[("Excel Files", "*.xlsx")])
         
         if file_path:
             try:
                 self.keywords_file_path = file_path
                 self.keywords = self.excel_handler.read_keywords(file_path)
-                self.status_label.setText(f"已加载 {len(self.keywords)} 个关键词")
+                self.status_label.config(text=f"已加载 {len(self.keywords)} 个关键词")
             except Exception as e:
-                QMessageBox.critical(self, "错误", f"加载关键词失败: {str(e)}")
+                messagebox.showerror("错误", f"加载关键词失败: {str(e)}")
+    
+    def update_progress(self, current, total, start_time):
+        """更新进度条和进度信息"""
+        progress = int((current / total) * 100)
+        self.progress_bar["value"] = progress
+        
+        elapsed_time = time.time() - start_time
+        eta = (elapsed_time / current) * (total - current) if current > 0 else 0
+        
+        self.progress_label.config(
+            text=f"进度: {current}/{total} ({progress}%) | 已用时: {elapsed_time:.2f}秒 | 预计剩余: {eta:.2f}秒")
+        self.update()
     
     def start_classification(self):
         # 获取规则
-        rules_text = self.rules_text.toPlainText()
-        if not rules_text.strip() and not self.rules_file_path:
-            QMessageBox.warning(self, "警告", "请输入分词规则或从Excel加载规则")
+        rules_text = self.rules_text.get(1.0, tk.END).strip()
+        if not rules_text and not self.rules_file_path:
+            messagebox.showwarning("警告", "请输入分词规则或从Excel加载规则")
             return
         
         # 如果没有从文本框获取到规则，但有规则文件路径，则从文件重新读取
-        if not rules_text.strip() and self.rules_file_path:
+        if not rules_text and self.rules_file_path:
             rules = self.excel_handler.read_rules(self.rules_file_path)
         else:
             # 从文本框获取规则
@@ -112,7 +157,7 @@ class MainWindow(QMainWindow):
         
         # 检查关键词
         if not self.keywords and not self.keywords_file_path:
-            QMessageBox.warning(self, "警告", "请先加载关键词")
+            messagebox.showwarning("警告", "请先加载关键词")
             return
         
         # 如果没有关键词但有文件路径，则重新读取
@@ -120,14 +165,48 @@ class MainWindow(QMainWindow):
             self.keywords = self.excel_handler.read_keywords(self.keywords_file_path)
         
         try:
+            # 重置进度条
+            self.progress_bar["value"] = 0
+            self.progress_label.config(text="")
+            
             # 设置规则
             self.classifier.set_rules(rules)
             
             # 开始分类
-            self.status_label.setText("正在分类...")
-            QApplication.processEvents()  # 更新UI
+            self.status_label.config(text="正在分类...")
+            self.update()  # 更新UI
             
-            results = self.classifier.classify_keywords(self.keywords)
+            # 记录开始时间
+            start_time = time.time()
+            
+            # 修改classify_keywords方法的调用，添加进度更新
+            total_keywords = len(self.keywords)
+            results = []
+            
+            for i, keyword in enumerate(self.keywords):
+                # 对每个关键词应用所有规则
+                matched_rules = []
+                
+                for rule_text, rule_matcher in self.classifier.parsed_rules:
+                    try:
+                        if rule_matcher(keyword):
+                            matched_rules.append(rule_text)
+                    except Exception as e:
+                        print(f"应用规则 '{rule_text}' 到关键词 '{keyword}' 时出错: {str(e)}")
+                
+                # 添加结果
+                results.append({
+                    'keyword': keyword,
+                    'matched_rules': '|'.join(matched_rules) if matched_rules else ''
+                })
+                
+                # 更新进度
+                if i % 5 == 0 or i == total_keywords - 1:  # 每5个关键词更新一次，或最后一个
+                    self.update_progress(i + 1, total_keywords, start_time)
+            
+            # 计算总耗时
+            end_time = time.time()
+            total_time = end_time - start_time
             
             # 保存结果
             if not os.path.exists('./data'):
@@ -136,18 +215,19 @@ class MainWindow(QMainWindow):
             output_file = './data/classification_results.xlsx'
             self.excel_handler.save_results(results, output_file)
             
-            self.status_label.setText(f"分类完成，结果已保存至 {os.path.abspath(output_file)}")
-            QMessageBox.information(self, "完成", f"分类完成，共处理 {len(results)} 个关键词")
+            self.status_label.config(text=f"分类完成，结果已保存至 {os.path.abspath(output_file)}")
+            self.progress_label.config(text=f"总耗时: {total_time:.2f}秒 | 平均每个关键词: {total_time/total_keywords:.4f}秒")
+            messagebox.showinfo("完成", f"分类完成，共处理 {len(results)} 个关键词，总耗时: {total_time:.2f}秒")
             
         except Exception as e:
-            QMessageBox.critical(self, "错误", f"分类过程中出错: {str(e)}")
-            self.status_label.setText("分类失败")
+            messagebox.showerror("错误", f"分类过程中出错: {str(e)}")
+            self.status_label.config(text="分类失败")
+            self.progress_label.config(text="")
+            self.progress_bar["value"] = 0
 
 def main():
-    app = QApplication(sys.argv)
     window = MainWindow()
-    window.show()
-    sys.exit(app.exec_())
+    window.mainloop()
 
 if __name__ == "__main__":
     main()
