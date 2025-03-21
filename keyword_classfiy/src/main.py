@@ -3,6 +3,9 @@ import os
 import time
 import tkinter as tk
 from tkinter import ttk, scrolledtext, filedialog, messagebox
+import pandas as pd
+import re
+from pathlib import Path
 
 from keyword_classifier import KeywordClassifier
 from excel_handler import ExcelHandler
@@ -11,19 +14,37 @@ class MainWindow(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("关键词分类工具")
-        self.geometry("800x600")
+        self.geometry("900x700")
         
         self.excel_handler = ExcelHandler()
         self.classifier = KeywordClassifier()
         self.case_sensitive = tk.BooleanVar(value=False)  # 默认为大小写不敏感
         
+        # 文件比较功能的变量
+        self.compare_files = []  # 存储要比较的文件路径
+        
         self.init_ui()
     
     def init_ui(self):
-        # 主框架
-        main_frame = ttk.Frame(self, padding="10")
-        main_frame.pack(fill=tk.BOTH, expand=True)
+        # 创建一个笔记本控件，用于切换不同功能页面
+        self.notebook = ttk.Notebook(self)
+        self.notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
+        # 分类功能页面
+        classify_frame = ttk.Frame(self.notebook, padding="10")
+        self.notebook.add(classify_frame, text="关键词分类")
+        
+        # 文件比较功能页面
+        compare_frame = ttk.Frame(self.notebook, padding="10")
+        self.notebook.add(compare_frame, text="文件比较")
+        
+        # 初始化分类功能UI
+        self.init_classify_ui(classify_frame)
+        
+        # 初始化文件比较功能UI
+        self.init_compare_ui(compare_frame)
+        
+    def init_classify_ui(self, main_frame):
         # 规则输入区域
         rules_frame = ttk.LabelFrame(main_frame, text="分词规则:")
         rules_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
@@ -117,6 +138,59 @@ class MainWindow(tk.Tk):
         
         # 清空错误信息
         self.clear_error_text()
+    
+    def init_compare_ui(self, main_frame):
+        # 文件选择区域
+        file_select_frame = ttk.LabelFrame(main_frame, text="选择要比较的文件:")
+        file_select_frame.pack(fill=tk.X, padx=5, pady=5)
+        
+        # 按钮区域
+        buttons_frame = ttk.Frame(file_select_frame)
+        buttons_frame.pack(fill=tk.X, padx=5, pady=5)
+        
+        # 添加文件按钮
+        self.add_file_btn = ttk.Button(buttons_frame, text="添加文件", command=self.add_files)
+        self.add_file_btn.pack(side=tk.LEFT, padx=5)
+        
+        # 添加文件夹按钮
+        self.add_folder_btn = ttk.Button(buttons_frame, text="添加文件夹", command=self.add_folder)
+        self.add_folder_btn.pack(side=tk.LEFT, padx=5)
+        
+        # 清空文件列表按钮
+        self.clear_files_btn = ttk.Button(buttons_frame, text="清空列表", command=self.clear_file_list)
+        self.clear_files_btn.pack(side=tk.LEFT, padx=5)
+        
+        # 开始比较按钮
+        self.compare_btn = ttk.Button(buttons_frame, text="开始比较", command=self.start_comparison)
+        self.compare_btn.pack(side=tk.LEFT, padx=5)
+        
+        # 文件列表显示区域
+        files_frame = ttk.Frame(file_select_frame)
+        files_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        # 文件列表标签
+        files_label = ttk.Label(files_frame, text="已选择的文件:")
+        files_label.pack(anchor=tk.W, padx=5, pady=2)
+        
+        # 文件列表显示区域
+        self.files_text = scrolledtext.ScrolledText(files_frame, height=6, wrap=tk.WORD)
+        self.files_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        self.files_text.config(state=tk.DISABLED)  # 初始状态为禁用，防止用户编辑
+        
+        # 比较结果显示区域
+        result_frame = ttk.LabelFrame(main_frame, text="比较结果:")
+        result_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        self.result_text = scrolledtext.ScrolledText(result_frame, height=15, wrap=tk.WORD)
+        self.result_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        self.result_text.config(state=tk.DISABLED)  # 初始状态为禁用，防止用户编辑
+        
+        # 状态区域
+        status_frame = ttk.Frame(main_frame)
+        status_frame.pack(fill=tk.X, padx=5, pady=5)
+        
+        self.compare_status_label = ttk.Label(status_frame, text="就绪")
+        self.compare_status_label.pack(anchor=tk.W)
     
     def clear_error_text(self):
         """清空错误信息显示区域"""
@@ -316,6 +390,305 @@ class MainWindow(tk.Tk):
             self.status_label.config(text="分类失败")
             self.progress_label.config(text="")
             self.progress_bar["value"] = 0
+
+    def add_files(self):
+        """添加文件到比较列表"""
+        file_paths = filedialog.askopenfilenames(
+            title="选择Excel文件", 
+            filetypes=[("Excel Files", "*.xlsx")])
+        
+        if file_paths:
+            # 筛选出以"关键词分类结果_"开头的文件
+            valid_files = []
+            for path in file_paths:
+                filename = os.path.basename(path)
+                if filename.startswith("关键词分类结果_"):
+                    valid_files.append(path)
+                    self.compare_files.append(path)
+            
+            # 更新文件列表显示
+            self.update_file_list_display()
+            
+            # 显示提示信息
+            if len(valid_files) < len(file_paths):
+                messagebox.showinfo("提示", f"已添加 {len(valid_files)} 个有效文件，忽略了 {len(file_paths) - len(valid_files)} 个非关键词分类结果文件")
+            else:
+                self.compare_status_label.config(text=f"已添加 {len(valid_files)} 个文件")
+    
+    def add_folder(self):
+        """添加文件夹下所有符合条件的文件"""
+        folder_path = filedialog.askdirectory(title="选择文件夹")
+        
+        if folder_path:
+            # 获取文件夹下所有Excel文件
+            excel_files = []
+            for file in os.listdir(folder_path):
+                if file.endswith(".xlsx") and file.startswith("关键词分类结果_"):
+                    full_path = os.path.join(folder_path, file)
+                    excel_files.append(full_path)
+                    self.compare_files.append(full_path)
+            
+            # 更新文件列表显示
+            self.update_file_list_display()
+            
+            # 显示提示信息
+            if excel_files:
+                self.compare_status_label.config(text=f"已从文件夹添加 {len(excel_files)} 个文件")
+            else:
+                messagebox.showinfo("提示", "所选文件夹中没有找到符合条件的Excel文件")
+    
+    def clear_file_list(self):
+        """清空文件列表"""
+        self.compare_files = []
+        self.update_file_list_display()
+        self.compare_status_label.config(text="文件列表已清空")
+        
+        # 清空比较结果
+        self.result_text.config(state=tk.NORMAL)
+        self.result_text.delete(1.0, tk.END)
+        self.result_text.config(state=tk.DISABLED)
+    
+    def update_file_list_display(self):
+        """更新文件列表显示"""
+        self.files_text.config(state=tk.NORMAL)
+        self.files_text.delete(1.0, tk.END)
+        
+        for i, file_path in enumerate(self.compare_files):
+            filename = os.path.basename(file_path)
+            self.files_text.insert(tk.END, f"{i+1}. {filename}\n")
+        
+        self.files_text.config(state=tk.DISABLED)
+    
+    def start_comparison(self):
+        """开始比较文件内容"""
+        # 检查文件列表
+        if len(self.compare_files) < 2:
+            messagebox.showwarning("警告", "请至少添加两个文件进行比较")
+            return
+        
+        try:
+            # 清空比较结果
+            self.result_text.config(state=tk.NORMAL)
+            self.result_text.delete(1.0, tk.END)
+            
+            # 更新状态
+            self.compare_status_label.config(text="正在比较文件...")
+            self.update()  # 更新UI
+            
+            # 读取第一个文件作为基准
+            base_file = self.compare_files[0]
+            base_filename = os.path.basename(base_file)
+            base_df = pd.read_excel(base_file)
+            
+            # 显示基准文件信息
+            self.result_text.insert(tk.END, f"基准文件: {base_filename}\n")
+            self.result_text.insert(tk.END, f"包含 {len(base_df)} 行数据\n\n")
+            
+            # 存储所有比较结果，用于可能的导出
+            all_comparison_results = []
+            
+            # 逐个比较其他文件
+            for i, compare_file in enumerate(self.compare_files[1:], 1):
+                compare_filename = os.path.basename(compare_file)
+                self.result_text.insert(tk.END, f"比较文件 {i}: {compare_filename}\n")
+                
+                file_comparison_result = {
+                    "file_name": compare_filename,
+                    "differences": []
+                }
+                
+                try:
+                    compare_df = pd.read_excel(compare_file)
+                    
+                    # 检查行数是否一致
+                    if len(base_df) != len(compare_df):
+                        diff_msg = f"行数不一致! 基准: {len(base_df)}行, 比较文件: {len(compare_df)}行"
+                        self.result_text.insert(tk.END, f"{diff_msg}\n")
+                        file_comparison_result["row_count_diff"] = diff_msg
+                    
+                    # 检查列是否一致
+                    if set(base_df.columns) != set(compare_df.columns):
+                        missing_cols = set(base_df.columns) - set(compare_df.columns)
+                        extra_cols = set(compare_df.columns) - set(base_df.columns)
+                        
+                        if missing_cols:
+                            missing_msg = f"缺少列: {', '.join(missing_cols)}"
+                            self.result_text.insert(tk.END, f"{missing_msg}\n")
+                            file_comparison_result["missing_columns"] = list(missing_cols)
+                        
+                        if extra_cols:
+                            extra_msg = f"多余列: {', '.join(extra_cols)}"
+                            self.result_text.insert(tk.END, f"{extra_msg}\n")
+                            file_comparison_result["extra_columns"] = list(extra_cols)
+                    
+                    # 检查共有列的内容是否一致
+                    common_cols = set(base_df.columns).intersection(set(compare_df.columns))
+                    differences = []
+                    diff_count = 0
+                    
+                    # 确定要比较的最小行数
+                    min_rows = min(len(base_df), len(compare_df))
+                    
+                    # 逐行比较共有列的内容
+                    for row_idx in range(min_rows):
+                        row_diffs = []
+                        row_diff_dict = {"row": row_idx + 1, "column_diffs": []}
+                        
+                        for col in common_cols:
+                            # 获取基准值和比较值
+                            base_val = base_df.iloc[row_idx][col]
+                            compare_val = compare_df.iloc[row_idx][col]
+                            
+                            # 处理NaN值的比较
+                            if pd.isna(base_val) and pd.isna(compare_val):
+                                continue  # 两者都是NaN，视为相同
+                            elif pd.isna(base_val) or pd.isna(compare_val):
+                                diff_text = f"{col}: 基准值为{'空' if pd.isna(base_val) else base_val}, 比较值为{'空' if pd.isna(compare_val) else compare_val}"
+                                row_diffs.append(diff_text)
+                                row_diff_dict["column_diffs"].append({
+                                    "column": col,
+                                    "base_value": "空" if pd.isna(base_val) else str(base_val),
+                                    "compare_value": "空" if pd.isna(compare_val) else str(compare_val)
+                                })
+                                diff_count += 1
+                            # 处理非NaN值的比较
+                            elif base_val != compare_val:
+                                diff_text = f"{col}: 基准值为{base_val}, 比较值为{compare_val}"
+                                row_diffs.append(diff_text)
+                                row_diff_dict["column_diffs"].append({
+                                    "column": col,
+                                    "base_value": str(base_val),
+                                    "compare_value": str(compare_val)
+                                })
+                                diff_count += 1
+                        
+                        # 如果当前行有差异，记录下来
+                        if row_diffs:
+                            differences.append(f"第{row_idx+1}行: {', '.join(row_diffs)}")
+                            file_comparison_result["differences"].append(row_diff_dict)
+                    
+                    # 显示比较结果
+                    if differences:
+                        self.result_text.insert(tk.END, f"发现 {diff_count} 处差异:\n")
+                        for diff in differences[:20]:  # 限制显示前20个差异，避免界面过长
+                            self.result_text.insert(tk.END, f"  - {diff}\n")
+                        
+                        if len(differences) > 20:
+                            self.result_text.insert(tk.END, f"  ... 还有 {len(differences) - 20} 处差异未显示\n")
+                    else:
+                        self.result_text.insert(tk.END, "内容完全一致\n")
+                    
+                    self.result_text.insert(tk.END, "\n")
+                    
+                except Exception as e:
+                    error_msg = f"比较文件 '{compare_filename}' 时出错: {str(e)}"
+                    self.result_text.insert(tk.END, f"错误: {error_msg}\n\n")
+                    file_comparison_result["error"] = error_msg
+                
+                # 添加当前文件的比较结果到总结果列表
+                all_comparison_results.append(file_comparison_result)
+            
+            # 添加导出结果按钮
+            export_frame = ttk.Frame(self.result_text.master)
+            export_frame.pack(fill=tk.X, padx=5, pady=5, before=self.result_text)
+            
+            export_btn = ttk.Button(
+                export_frame, 
+                text="导出比较结果", 
+                command=lambda: self.export_comparison_results(all_comparison_results)
+            )
+            export_btn.pack(side=tk.LEFT, padx=5)
+            
+            # 更新状态
+            self.compare_status_label.config(text="比较完成")
+            self.result_text.see(1.0)  # 滚动到顶部
+            
+        except Exception as e:
+            error_msg = f"比较过程中出错: {str(e)}"
+            self.result_text.config(state=tk.NORMAL)
+            self.result_text.insert(tk.END, f"错误: {error_msg}\n")
+            self.compare_status_label.config(text="比较失败")
+        
+        # 确保结果文本框为只读状态
+        self.result_text.config(state=tk.DISABLED)
+    
+    def export_comparison_results(self, comparison_results):
+        """导出比较结果到Excel文件"""
+        if not comparison_results:
+            messagebox.showwarning("警告", "没有比较结果可导出")
+            return
+        
+        try:
+            # 获取保存文件路径
+            current_time = time.strftime("%Y%m%d_%H%M%S")
+            default_filename = f"文件比较结果_{current_time}.xlsx"
+            
+            file_path = filedialog.asksaveasfilename(
+                title="保存比较结果",
+                initialfile=default_filename,
+                defaultextension=".xlsx",
+                filetypes=[("Excel Files", "*.xlsx")]
+            )
+            
+            if not file_path:
+                return  # 用户取消了保存操作
+            
+            # 创建一个Excel写入器
+            with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
+                # 创建一个总览表
+                overview_data = []
+                for i, result in enumerate(comparison_results):
+                    file_name = result.get("file_name", f"文件{i+1}")
+                    diff_count = len(result.get("differences", []))
+                    row_count_diff = result.get("row_count_diff", "行数一致")
+                    missing_cols = ", ".join(result.get("missing_columns", [])) or "无"
+                    extra_cols = ", ".join(result.get("extra_columns", [])) or "无"
+                    error = result.get("error", "无")
+                    
+                    overview_data.append({
+                        "文件名": file_name,
+                        "差异数量": diff_count,
+                        "行数差异": row_count_diff if "行数不一致" in row_count_diff else "行数一致",
+                        "缺少列": missing_cols,
+                        "多余列": extra_cols,
+                        "错误信息": error
+                    })
+                
+                # 写入总览表
+                overview_df = pd.DataFrame(overview_data)
+                overview_df.to_excel(writer, sheet_name="比较总览", index=False)
+                
+                # 为每个文件创建详细差异表
+                for i, result in enumerate(comparison_results):
+                    file_name = result.get("file_name", f"文件{i+1}")
+                    differences = result.get("differences", [])
+                    
+                    if differences:
+                        # 创建详细差异数据
+                        detail_data = []
+                        for diff in differences:
+                            row_num = diff.get("row", "")
+                            for col_diff in diff.get("column_diffs", []):
+                                detail_data.append({
+                                    "行号": row_num,
+                                    "列名": col_diff.get("column", ""),
+                                    "基准值": col_diff.get("base_value", ""),
+                                    "比较值": col_diff.get("compare_value", "")
+                                })
+                        
+                        # 写入详细差异表
+                        if detail_data:
+                            detail_df = pd.DataFrame(detail_data)
+                            sheet_name = f"差异详情_{i+1}"
+                            detail_df.to_excel(writer, sheet_name=sheet_name, index=False)
+            
+            messagebox.showinfo("成功", f"比较结果已导出到: {file_path}")
+            self.compare_status_label.config(text=f"比较结果已导出到: {os.path.basename(file_path)}")
+            
+        except Exception as e:
+            error_msg = f"导出比较结果失败: {str(e)}"
+            messagebox.showerror("错误", error_msg)
+            self.compare_status_label.config(text="导出失败")
 
 def main():
     window = MainWindow()
