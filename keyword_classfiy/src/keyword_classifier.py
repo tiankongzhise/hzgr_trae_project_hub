@@ -64,10 +64,16 @@ class KeywordClassifier:
             word_str = str(word)
             return lambda keyword: word_str in keyword
     
-    def set_rules(self, rules):
-        """设置分词规则"""
+    def set_rules(self, rules, error_callback=None):
+        """设置分词规则
+        
+        Args:
+            rules: 规则列表
+            error_callback: 错误回调函数，用于将错误信息传递给UI显示
+        """
         self.rules = rules
         self.parsed_rules = []
+        parse_errors = []
         
         # 解析每条规则
         for i, rule in enumerate(rules):
@@ -77,7 +83,14 @@ class KeywordClassifier:
                 matcher = transformer.transform(tree)
                 self.parsed_rules.append((rule, matcher))
             except Exception as e:
-                print(f"规则 '{rule}' 解析失败: {str(e)}")
+                error_msg = f"规则 '{rule}' 解析失败: {str(e)}"
+                parse_errors.append(error_msg)
+                print(error_msg)  # 保留控制台输出
+                # 如果提供了错误回调函数，则调用它
+                if error_callback:
+                    error_callback(error_msg)
+        
+        return parse_errors  # 返回解析错误列表
     
     def classify_keywords(self, keywords):
         """对关键词进行分类"""
