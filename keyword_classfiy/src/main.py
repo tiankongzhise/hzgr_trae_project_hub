@@ -15,6 +15,7 @@ class MainWindow(tk.Tk):
         
         self.excel_handler = ExcelHandler()
         self.classifier = KeywordClassifier()
+        self.case_sensitive = tk.BooleanVar(value=False)  # 默认为大小写不敏感
         
         self.init_ui()
     
@@ -65,6 +66,16 @@ class MainWindow(tk.Tk):
         
         self.classify_btn = ttk.Button(buttons_frame, text="开始分类", command=self.start_classification)
         self.classify_btn.pack(side=tk.LEFT, padx=5)
+        
+        # 添加大小写敏感选项
+        self.case_sensitive_check = ttk.Checkbutton(
+            buttons_frame, 
+            text="大小写敏感", 
+            variable=self.case_sensitive,
+            onvalue=True,
+            offvalue=False
+        )
+        self.case_sensitive_check.pack(side=tk.LEFT, padx=15)
         
         # 格式提示区域
         format_frame = ttk.Frame(main_frame)
@@ -226,6 +237,9 @@ class MainWindow(tk.Tk):
             # 重置进度条
             self.progress_bar["value"] = 0
             self.progress_label.config(text="")
+            
+            # 更新分类器的大小写敏感设置
+            self.classifier.case_sensitive = self.case_sensitive.get()
             
             # 设置规则，并传递错误回调函数
             parse_errors = self.classifier.set_rules(rules, self.add_error_message)

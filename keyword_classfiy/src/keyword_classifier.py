@@ -1,9 +1,10 @@
 from lark import Lark, Transformer, v_args
 
 class KeywordClassifier:
-    def __init__(self):
+    def __init__(self, case_sensitive=False):
         self.rules = []
         self.parsed_rules = []
+        self.case_sensitive = case_sensitive
         self.parser = self._create_parser()
     
     def _create_parser(self):
@@ -40,6 +41,10 @@ class KeywordClassifier:
     @v_args(inline=True)
     class RuleTransformer(Transformer):
         """转换解析树为可执行的匹配函数"""
+        def __init__(self, case_sensitive=False):
+            super().__init__()
+            self.case_sensitive = case_sensitive
+        
         def or_op(self, left, right):
             return lambda keyword: left(keyword) or right(keyword)
         
@@ -51,18 +56,27 @@ class KeywordClassifier:
         
         def exact_match(self, word):
             word_str = str(word)
-            return lambda keyword: keyword == word_str
+            if self.case_sensitive:
+                return lambda keyword: keyword == word_str
+            else:
+                return lambda keyword: keyword.lower() == word_str.lower()
         
         def exclude_match(self, expr):
             return lambda keyword: not expr(keyword)
         
         def term_exclude_match(self, term, expr):
             term_str = str(term)
-            return lambda keyword: term_str in keyword and not expr(keyword)
+            if self.case_sensitive:
+                return lambda keyword: term_str in keyword and not expr(keyword)
+            else:
+                return lambda keyword: term_str.lower() in keyword.lower() and not expr(keyword)
         
         def simple_term(self, word):
             word_str = str(word)
-            return lambda keyword: word_str in keyword
+            if self.case_sensitive:
+                return lambda keyword: word_str in keyword
+            else:
+                return lambda keyword: word_str.lower() in keyword.lower()
     
     def set_rules(self, rules, error_callback=None):
         """设置分词规则
@@ -79,7 +93,7 @@ class KeywordClassifier:
         for i, rule in enumerate(rules):
             try:
                 tree = self.parser.parse(rule)
-                transformer = self.RuleTransformer()
+                transformer = self.RuleTransformer(self.case_sensitive)
                 matcher = transformer.transform(tree)
                 self.parsed_rules.append((rule, matcher))
             except Exception as e:
