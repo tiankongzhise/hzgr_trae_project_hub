@@ -130,9 +130,12 @@ class MainWindow(tk.Tk):
                 self.clear_error_text()  # 清空之前的错误信息
                 self.rules_file_path = file_path
                 rules = self.excel_handler.read_rules(file_path)
+                # 显示去重前后的规则数量
+                original_count = len(rules)
+                # 规则已在excel_handler.py中去重
                 self.rules_text.delete(1.0, tk.END)
                 self.rules_text.insert(tk.END, "\n".join(rules))
-                self.status_label.config(text=f"已加载 {len(rules)} 条规则")
+                self.status_label.config(text=f"已加载 {len(rules)} 条规则 (已自动去重)")
             except Exception as e:
                 error_msg = f"加载规则失败: {str(e)}"
                 self.add_error_message(error_msg)
@@ -148,7 +151,7 @@ class MainWindow(tk.Tk):
                 self.clear_error_text()  # 清空之前的错误信息
                 self.keywords_file_path = file_path
                 self.keywords = self.excel_handler.read_keywords(file_path)
-                self.status_label.config(text=f"已加载 {len(self.keywords)} 个关键词")
+                self.status_label.config(text=f"已加载 {len(self.keywords)} 个关键词 (已自动去重)")
             except Exception as e:
                 error_msg = f"加载关键词失败: {str(e)}"
                 self.add_error_message(error_msg)
@@ -194,7 +197,13 @@ class MainWindow(tk.Tk):
             temp_rules = []
             for r in rules:
                 temp_rules.extend([tr.strip() for tr in r.split(',') if tr.strip()])
-            rules = temp_rules
+            # 使用集合去重
+            original_count = len(temp_rules)
+            rules = list(set(temp_rules))
+            # 如果有去重，在状态栏显示信息
+            if original_count > len(rules):
+                self.status_label.config(text=f"规则已自动去重: {original_count} -> {len(rules)}")
+                self.update()  # 更新UI
         
         # 检查关键词
         if not self.keywords and not self.keywords_file_path:

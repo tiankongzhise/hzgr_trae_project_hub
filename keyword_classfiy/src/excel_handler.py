@@ -7,7 +7,7 @@ class ExcelHandler:
         pass
     
     def read_rules(self, file_path):
-        """从Excel文件中读取分词规则"""
+        """从Excel文件中读取分词规则，并进行去重"""
         try:
             # 默认读取分词规则sheet的分词规则列
             df = pd.read_excel(file_path, sheet_name='分词规则')
@@ -19,22 +19,28 @@ class ExcelHandler:
                 # 如果没有找到分词规则列，使用第一列
                 rules = df.iloc[:, 0].dropna().astype(str).tolist()
             
-            # 进一步处理规则，按逗号分隔
+            # 进一步处理规则，按逗号分隔，并去重
             result_rules = []
             for rule in rules:
                 result_rules.extend([r.strip() for r in rule.split(',') if r.strip()])
+            
+            # 使用集合去重，然后转回列表
+            result_rules = list(set(result_rules))
             
             return result_rules
         except Exception as e:
             raise Exception(f"读取规则文件失败: {str(e)}")
     
     def read_keywords(self, file_path):
-        """从Excel文件中读取关键词"""
+        """从Excel文件中读取关键词，并进行去重"""
         try:
             df = pd.read_excel(file_path)
             
             # 使用第一列作为关键词列
             keywords = df.iloc[:, 0].dropna().astype(str).tolist()
+            
+            # 使用集合去重，然后转回列表
+            keywords = list(set(keywords))
             
             return keywords
         except Exception as e:
