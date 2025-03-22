@@ -7,6 +7,81 @@ class KeywordClassifier:
         self.case_sensitive = case_sensitive
         self.separator = separator
         self.parser = self._create_parser()
+        
+    def _preprocess_text(self, text, error_callback=None):
+        """预处理文本，清除不可见的干扰字符
+        
+        Args:
+            text: 需要预处理的文本
+            error_callback: 错误回调函数，用于将错误信息传递给UI显示
+            
+        Returns:
+            清除干扰字符后的文本
+        """
+        if not text:
+            return text
+            
+        # 定义需要清除的不可见字符列表
+        invisible_chars = [
+            0x200B,  # 零宽空格
+            0x200C,  # 零宽非连接符
+            0x200D,  # 零宽连接符
+            0x200E,  # 从左至右标记
+            0x200F,  # 从右至左标记
+            0x202A,  # 从左至右嵌入
+            0x202B,  # 从右至左嵌入
+            0x202C,  # 弹出方向格式
+            0x202D,  # 从左至右覆盖
+            0x202E,  # 从右至左覆盖
+            0x2060,  # 单词连接符
+            0x2061,  # 函数应用
+            0x2062,  # 隐形乘号
+            0x2063,  # 隐形分隔符
+            0x2064,  # 隐形加号
+            0xFEFF,  # 零宽非断空格(BOM)
+        ]
+        
+        """清理规则中的不可见字符并检查编码"""
+        # 检查是否包含零宽空格等不可见字符
+        has_invisible = False
+        cleaned_rule = ""
+        
+        for char in text:
+            code_point = ord(char)
+            if code_point in invisible_chars:
+                msg = f"发现不可见字符: U+{code_point:04X} 在规则 '{text}' 中"
+                print(msg)
+                if error_callback:
+                    error_callback(msg)
+                has_invisible = True
+                # 不添加这个字符到清理后的规则
+            else:
+                cleaned_rule += char
+        
+        # 如果规则被清理了，打印出来
+        if has_invisible:
+            msg1 = f"清理前: '{text}' (长度: {len(text)})"
+            msg2 = f"清理后: '{cleaned_rule}' (长度: {len(cleaned_rule)})"
+            print(msg1)
+            print(msg2)
+            
+            if error_callback:
+                error_callback(msg1)
+                error_callback(msg2)
+            
+            # 打印每个字符的编码
+            print("字符编码详情:")
+            if error_callback:
+                error_callback("字符编码详情:")
+            
+            for i, char in enumerate(text):
+                char_info = f"  位置 {i+1}: '{char}' - U+{ord(char):04X}"
+                print(char_info)
+                if error_callback:
+                    error_callback(char_info)
+        
+        return cleaned_rule if has_invisible else text
+
     
     def _create_parser(self):
         """创建Lark解析器"""
@@ -77,6 +152,7 @@ class KeywordClassifier:
             if self.case_sensitive:
                 return lambda keyword: word_str in keyword
             else:
+                # 修复单个字符匹配逻辑 - 移除冗余条件
                 return lambda keyword: word_str.lower() in keyword.lower()
     
     def set_rules(self, rules, error_callback=None):
@@ -86,12 +162,14 @@ class KeywordClassifier:
             rules: 规则列表
             error_callback: 错误回调函数，用于将错误信息传递给UI显示
         """
-        self.rules = rules
+        # 预处理规则，清除不可见字符
+        processed_rules = [self._preprocess_text(rule, error_callback) for rule in rules]
+        self.rules = processed_rules
         self.parsed_rules = []
         parse_errors = []
         
         # 解析每条规则
-        for i, rule in enumerate(rules):
+        for i, rule in enumerate(processed_rules):
             try:
                 tree = self.parser.parse(rule)
                 transformer = self.RuleTransformer(self.case_sensitive)
@@ -107,11 +185,14 @@ class KeywordClassifier:
         
         return parse_errors  # 返回解析错误列表
     
-    def classify_keywords(self, keywords):
+    def classify_keywords(self, keywords, error_callback=None):
         """对关键词进行分类"""
         results = []
         
-        for keyword in keywords:
+        # 预处理关键词，清除不可见字符
+        processed_keywords = [self._preprocess_text(keyword, error_callback) for keyword in keywords]
+        
+        for keyword in processed_keywords:
             matched_rules = []
             
             # 对每个关键词应用所有规则
