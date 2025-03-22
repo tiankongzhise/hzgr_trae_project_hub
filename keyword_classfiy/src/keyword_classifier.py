@@ -69,16 +69,16 @@ class KeywordClassifier:
                 error_callback(msg1)
                 error_callback(msg2)
             
-            # 打印每个字符的编码
-            print("字符编码详情:")
-            if error_callback:
-                error_callback("字符编码详情:")
+            # # 打印每个字符的编码
+            # print("字符编码详情:")
+            # if error_callback:
+            #     error_callback("字符编码详情:")
             
-            for i, char in enumerate(text):
-                char_info = f"  位置 {i+1}: '{char}' - U+{ord(char):04X}"
-                print(char_info)
-                if error_callback:
-                    error_callback(char_info)
+            # for i, char in enumerate(text):
+            #     char_info = f"  位置 {i+1}: '{char}' - U+{ord(char):04X}"
+            #     print(char_info)
+            #     if error_callback:
+            #         error_callback(char_info)
         
         return cleaned_rule if has_invisible else text
 
