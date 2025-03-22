@@ -4,9 +4,9 @@ import time
 import tkinter as tk
 from tkinter import ttk, scrolledtext, filedialog, messagebox
 import pandas as pd
-import re
-import tomli
-from pathlib import Path
+# import re
+import toml
+# from pathlib import Path
 
 from keyword_classifier import KeywordClassifier
 from excel_handler import ExcelHandler
@@ -29,26 +29,14 @@ class MainWindow(tk.Tk):
         self.init_ui()
     
     def get_version(self):
-        """从pyproject.toml文件中读取版本号"""
-        try:
-            # 获取项目根目录路径
-            current_dir = os.path.dirname(os.path.abspath(__file__))
-            project_root = os.path.dirname(current_dir)
-            toml_path = os.path.join(project_root, 'pyproject.toml')
-            
-            # 如果找不到文件，尝试向上一级目录查找
-            if not os.path.exists(toml_path):
-                project_root = os.path.dirname(project_root)
-                toml_path = os.path.join(project_root, 'pyproject.toml')
-            
-            # 读取TOML文件
-            with open(toml_path, 'rb') as f:
-                data = tomli.load(f)
-                version = data.get('project', {}).get('version', '未知')
-                return version
-        except Exception as e:
-            print(f"读取版本号失败: {str(e)}")
-            return "未知"
+        """获取版本号"""
+        import os
+        import sys
+        # 获取当前文件所在目录
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        # 导入同级目录下的version模块
+        from version import __version__
+        return __version__
     
     def init_ui(self):
         # 创建一个笔记本控件，用于切换不同功能页面
