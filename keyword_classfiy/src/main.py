@@ -20,7 +20,8 @@ class MainWindow(tk.Tk):
         self.geometry("900x700")
         
         self.excel_handler = ExcelHandler()
-        self.classifier = KeywordClassifier()
+        self.separator = tk.StringVar(value="|")  # 默认分隔符为|
+        self.classifier = KeywordClassifier(separator=self.separator.get())
         self.case_sensitive = tk.BooleanVar(value=False)  # 默认为大小写不敏感
         
         # 文件比较功能的变量
@@ -110,6 +111,16 @@ class MainWindow(tk.Tk):
             offvalue=False
         )
         self.case_sensitive_check.pack(side=tk.LEFT, padx=15)
+        
+        # 添加分隔符输入框
+        separator_frame = ttk.Frame(buttons_frame)
+        separator_frame.pack(side=tk.LEFT, padx=15)
+        
+        separator_label = ttk.Label(separator_frame, text="分隔符:")
+        separator_label.pack(side=tk.LEFT)
+        
+        separator_entry = ttk.Entry(separator_frame, textvariable=self.separator, width=5)
+        separator_entry.pack(side=tk.LEFT, padx=2)
         
         # 格式提示区域
         format_frame = ttk.Frame(main_frame)
@@ -335,8 +346,9 @@ class MainWindow(tk.Tk):
             self.progress_bar["value"] = 0
             self.progress_label.config(text="")
             
-            # 更新分类器的大小写敏感设置
+            # 更新分类器的大小写敏感设置和分隔符设置
             self.classifier.case_sensitive = self.case_sensitive.get()
+            self.classifier.separator = self.separator.get()
             
             # 设置规则，并传递错误回调函数
             parse_errors = self.classifier.set_rules(rules, self.add_error_message)
@@ -376,7 +388,7 @@ class MainWindow(tk.Tk):
                 # 添加结果
                 results.append({
                     'keyword': keyword,
-                    'matched_rules': '|'.join(matched_rules) if matched_rules else ''
+                    'matched_rules': self.classifier.separator.join(matched_rules) if matched_rules else ''
                 })
                 
                 # 更新进度

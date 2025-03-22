@@ -1,10 +1,11 @@
 from lark import Lark, Transformer, v_args
 
 class KeywordClassifier:
-    def __init__(self, case_sensitive=False):
+    def __init__(self, case_sensitive=False, separator='|'):
         self.rules = []
         self.parsed_rules = []
         self.case_sensitive = case_sensitive
+        self.separator = separator
         self.parser = self._create_parser()
     
     def _create_parser(self):
@@ -124,7 +125,7 @@ class KeywordClassifier:
             # 添加结果
             results.append({
                 'keyword': keyword,
-                'matched_rules': '|'.join(matched_rules) if matched_rules else ''
+                'matched_rules': self.separator.join(matched_rules) if matched_rules else ''
             })
         
         return results
