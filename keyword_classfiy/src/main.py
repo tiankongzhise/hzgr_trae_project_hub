@@ -409,35 +409,31 @@ class MainWindow(tk.Tk):
             # 记录开始时间
             start_time = time.time()
             
-            # 修改classify_keywords方法的调用，添加进度更新
+            # 使用KeywordClassifier的classify_keywords方法进行分类
+            # 这样可以确保关键词在分类前都经过了不可见字符的清理
             total_keywords = len(self.keywords)
-            results = []
             error_count = 0  # 记录错误数量
             
-            for i, keyword in enumerate(self.keywords):
-                # 对每个关键词应用所有规则
-                matched_rules = []
-                keyword_error = False  # 标记当前关键词是否有错误
+            # 定义错误回调函数，用于将错误信息传递给UI显示
+            def error_callback(error_msg):
+                nonlocal error_count
+                self.add_error_message(error_msg)
+                error_count += 1
+            
+            # 分批处理关键词，每处理一批更新一次进度
+            batch_size = 5
+            results = []
+            
+            for i in range(0, total_keywords, batch_size):
+                batch_end = min(i + batch_size, total_keywords)
+                batch_keywords = self.keywords[i:batch_end]
                 
-                for rule_text, rule_matcher in self.classifier.parsed_rules:
-                    try:
-                        if rule_matcher(keyword):
-                            matched_rules.append(rule_text)
-                    except Exception as e:
-                        error_msg = f"应用规则 '{rule_text}' 到关键词 '{keyword}' 时出错: {str(e)}"
-                        self.add_error_message(error_msg)
-                        error_count += 1
-                        keyword_error = True
-                
-                # 添加结果
-                results.append({
-                    'keyword': keyword,
-                    'matched_rules': self.classifier.separator.join(matched_rules) if matched_rules else ''
-                })
+                # 调用classify_keywords方法，确保关键词经过预处理
+                batch_results = self.classifier.classify_keywords(batch_keywords, error_callback)
+                results.extend(batch_results)
                 
                 # 更新进度
-                if i % 5 == 0 or i == total_keywords - 1:  # 每5个关键词更新一次，或最后一个
-                    self.update_progress(i + 1, total_keywords, start_time)
+                self.update_progress(batch_end, total_keywords, start_time)
             
             # 计算总耗时
             end_time = time.time()
