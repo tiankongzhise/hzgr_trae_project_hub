@@ -1,6 +1,6 @@
 [project]
 name = "keyword-classfiy"
-version = "0.2.0"
+version = "0.2.2"
 description = "关键词分类工具，支持复杂的分词规则匹配"
 readme = "README.md"
 requires-python = ">=3.8"

@@ -20,9 +20,12 @@ class MainWindow(tk.Tk):
         self.geometry("900x700")
         
         self.excel_handler = ExcelHandler()
-        self.separator = tk.StringVar(value="|")  # 默认分隔符为|
+        self.separator = tk.StringVar(value="&")  # 默认分隔符为&
         self.classifier = KeywordClassifier(separator=self.separator.get())
         self.case_sensitive = tk.BooleanVar(value=False)  # 默认为大小写不敏感
+        
+        # 禁止使用的分隔符字符
+        self.forbidden_separators = ["|", ",", "<", ">", "[", "]", "+", "(", ")"]
         
         # 文件比较功能的变量
         self.compare_files = []  # 存储要比较的文件路径
@@ -122,6 +125,27 @@ class MainWindow(tk.Tk):
         separator_entry = ttk.Entry(separator_frame, textvariable=self.separator, width=5)
         separator_entry.pack(side=tk.LEFT, padx=2)
         
+        # 添加分隔符验证功能
+        separator_entry.bind("<FocusOut>", self.validate_separator)
+        
+        # 添加分隔符提示信息
+        separator_tip_label = ttk.Label(separator_frame, text="ℹ️", cursor="question_arrow")
+        separator_tip_label.pack(side=tk.LEFT, padx=2)
+        
+        # 分隔符提示信息
+        separator_tip_text = "注意: 以下字符在规则中有特殊功能，不能用作分隔符:\n|, ,, <, >, [, ], +, (, )"
+        
+        # 创建分隔符提示弹出窗口
+        def show_separator_tip(event):
+            tip = tk.Toplevel(self)
+            tip.wm_overrideredirect(True)
+            tip.geometry(f"+{event.x_root+10}+{event.y_root+10}")
+            ttk.Label(tip, text=separator_tip_text, background="#FFFFCC", relief=tk.SOLID, borderwidth=1).pack()
+            tip.after(5000, tip.destroy)  # 5秒后自动关闭
+            
+        separator_tip_label.bind('<Enter>', show_separator_tip)
+        separator_tip_label.bind('<Leave>', hide_tooltip)
+        
         # 格式提示区域
         format_frame = ttk.Frame(main_frame)
         format_frame.pack(fill=tk.X, padx=5, pady=5)
@@ -219,6 +243,22 @@ class MainWindow(tk.Tk):
         
         self.compare_status_label = ttk.Label(status_frame, text="就绪")
         self.compare_status_label.pack(anchor=tk.W)
+    
+    def validate_separator(self, event=None):
+        """验证分隔符是否合法"""
+        current_separator = self.separator.get()
+        
+        # 检查是否使用了禁止的分隔符
+        for forbidden in self.forbidden_separators:
+            if forbidden in current_separator:
+                error_msg = f"分隔符不能包含特殊字符: '{forbidden}'"
+                self.add_error_message(error_msg)
+                messagebox.showwarning("警告", f"分隔符不能包含特殊字符: '{forbidden}'\n这些字符在规则中有特殊功能，使用它们可能导致错误结果。")
+                # 重置为默认分隔符
+                self.separator.set("&")
+                return False
+        
+        return True
     
     def clear_error_text(self):
         """清空错误信息显示区域"""
@@ -346,6 +386,10 @@ class MainWindow(tk.Tk):
             self.progress_bar["value"] = 0
             self.progress_label.config(text="")
             
+            # 验证分隔符是否合法
+            if not self.validate_separator():
+                return
+                
             # 更新分类器的大小写敏感设置和分隔符设置
             self.classifier.case_sensitive = self.case_sensitive.get()
             self.classifier.separator = self.separator.get()

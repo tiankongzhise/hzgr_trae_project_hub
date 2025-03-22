@@ -1,7 +1,7 @@
 from lark import Lark, Transformer, v_args
 
 class KeywordClassifier:
-    def __init__(self, case_sensitive=False, separator='|'):
+    def __init__(self, case_sensitive=False, separator='&'):
         self.rules = []
         self.parsed_rules = []
         self.case_sensitive = case_sensitive
