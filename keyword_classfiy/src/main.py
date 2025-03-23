@@ -115,6 +115,17 @@ class MainWindow(tk.Tk):
         )
         self.case_sensitive_check.pack(side=tk.LEFT, padx=15)
         
+        # 添加多进程选项
+        self.use_multiprocessing = tk.BooleanVar(value=True)  # 默认启用多进程
+        self.multiprocessing_check = ttk.Checkbutton(
+            buttons_frame,
+            text="使用多进程",
+            variable=self.use_multiprocessing,
+            onvalue=True,
+            offvalue=False
+        )
+        self.multiprocessing_check.pack(side=tk.LEFT, padx=15)
+        
         # 添加分隔符输入框
         separator_frame = ttk.Frame(buttons_frame)
         separator_frame.pack(side=tk.LEFT, padx=15)
@@ -420,20 +431,36 @@ class MainWindow(tk.Tk):
                 self.add_error_message(error_msg)
                 error_count += 1
             
-            # 分批处理关键词，每处理一批更新一次进度
-            batch_size = 5
-            results = []
-            
-            for i in range(0, total_keywords, batch_size):
-                batch_end = min(i + batch_size, total_keywords)
-                batch_keywords = self.keywords[i:batch_end]
+            # 根据用户选择决定使用单进程还是多进程
+            if self.use_multiprocessing.get():
+                # 使用多进程版本
+                self.status_label.config(text="正在使用多进程进行分类...")
+                self.update()  # 更新UI
                 
-                # 调用classify_keywords方法，确保关键词经过预处理
-                batch_results = self.classifier.classify_keywords(batch_keywords, error_callback)
-                results.extend(batch_results)
+                # 直接使用多进程版本处理所有关键词
+                results = self.classifier.classify_keywords_parallel(self.keywords, error_callback)
                 
-                # 更新进度
-                self.update_progress(batch_end, total_keywords, start_time)
+                # 更新进度（多进程版本一次性完成，直接显示100%）
+                self.update_progress(total_keywords, total_keywords, start_time)
+            else:
+                # 使用单进程版本
+                self.status_label.config(text="正在使用单进程进行分类...")
+                self.update()  # 更新UI
+                
+                # 分批处理关键词，每处理一批更新一次进度
+                batch_size = 5
+                results = []
+                
+                for i in range(0, total_keywords, batch_size):
+                    batch_end = min(i + batch_size, total_keywords)
+                    batch_keywords = self.keywords[i:batch_end]
+                    
+                    # 调用classify_keywords方法，确保关键词经过预处理
+                    batch_results = self.classifier.classify_keywords(batch_keywords, error_callback)
+                    results.extend(batch_results)
+                    
+                    # 更新进度
+                    self.update_progress(batch_end, total_keywords, start_time)
             
             # 计算总耗时
             end_time = time.time()

@@ -186,7 +186,7 @@ class KeywordClassifier:
         return parse_errors  # 返回解析错误列表
     
     def classify_keywords(self, keywords, error_callback=None):
-        """对关键词进行分类"""
+        """对关键词进行分类（单进程版本）"""
         results = []
         
         # 预处理关键词，清除不可见字符
@@ -208,5 +208,79 @@ class KeywordClassifier:
                 'keyword': keyword,
                 'matched_rules': self.separator.join(matched_rules) if matched_rules else ''
             })
+        
+        return results
+    
+    def _process_keyword_batch(self, keyword_batch):
+        """处理一批关键词（用于多进程）
+        
+        Args:
+            keyword_batch: 关键词列表
+            
+        Returns:
+            处理结果列表
+        """
+        results = []
+        for keyword in keyword_batch:
+            matched_rules = []
+            
+            # 对每个关键词应用所有规则
+            for rule_text, rule_matcher in self.parsed_rules:
+                try:
+                    if rule_matcher(keyword):
+                        matched_rules.append(rule_text)
+                except Exception as e:
+                    print(f"应用规则 '{rule_text}' 到关键词 '{keyword}' 时出错: {str(e)}")
+            
+            # 添加结果
+            results.append({
+                'keyword': keyword,
+                'matched_rules': self.separator.join(matched_rules) if matched_rules else ''
+            })
+        
+        return results
+    
+    def classify_keywords_parallel(self, keywords, error_callback=None, num_processes=None):
+        """对关键词进行分类（多进程版本）
+        
+        Args:
+            keywords: 关键词列表
+            error_callback: 错误回调函数
+            num_processes: 进程数，默认为CPU核心数
+            
+        Returns:
+            分类结果列表
+        """
+        import pathos.multiprocessing as mp
+
+
+
+        # 预处理关键词，清除不可见字符
+        processed_keywords = [self._preprocess_text(keyword, error_callback) for keyword in keywords]
+        
+        # 如果没有指定进程数，使用CPU核心数
+        if num_processes is None:
+            num_processes = mp.cpu_count()
+        
+        # 确保进程数不超过关键词数量和CPU核心数
+        num_processes = min(num_processes, len(processed_keywords), mp.cpu_count())
+        
+        # 如果关键词数量很少，直接使用单进程版本
+        if len(processed_keywords) < 10 or num_processes <= 1:
+            return self.classify_keywords(keywords, error_callback)
+        
+        # 将关键词分成多个批次
+        batch_size = max(1, len(processed_keywords) // num_processes)
+        batches = [processed_keywords[i:i+batch_size] for i in range(0, len(processed_keywords), batch_size)]
+        
+        # 创建进程池
+        with mp.Pool(processes=num_processes) as pool:
+            # 使用进程池并行处理每个批次
+            batch_results = pool.map(self._process_keyword_batch, batches)
+        
+        # 合并所有批次的结果
+        results = []
+        for batch in batch_results:
+            results.extend(batch)
         
         return results
