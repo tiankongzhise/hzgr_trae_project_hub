@@ -801,4 +801,7 @@ def main():
     window.mainloop()
 
 if __name__ == "__main__":
+    # 添加freeze_support()调用，解决PyInstaller打包后多进程不正常的问题
+    import multiprocessing
+    multiprocessing.freeze_support()
     main()
