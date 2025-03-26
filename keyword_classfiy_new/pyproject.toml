@@ -10,6 +10,7 @@ dependencies = [
     "pandas>=2.0.3",
     "pathos>=0.3.3",
     "pyinstaller>=6.12.0",
+    "pymupdf>=1.24.11",
     "toml>=0.10.2",
 ]
 

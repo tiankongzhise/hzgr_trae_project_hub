@@ -142,32 +142,6 @@ class WorkflowProcessor:
         except Exception as e:
             raise Exception(f"查找分类结果文件失败: {str(e)}")
     
-    def replace_special_chars(self, text: str) -> str:
-        """替换特殊字符
-        
-        Args:
-            text: 需要替换特殊字符的文本
-            
-        Returns:
-            替换后的文本
-        """
-        if not text or not isinstance(text, str):
-            return text
-            
-        # 替换特殊字符
-        result = text
-        
-        # 替换<>为《》
-        result = re.sub(r'<([^>]*)>', r'《\1》', result)
-        
-        # 替换|为~
-        result = result.replace('|', '~')
-        
-        # 替换[]为【】
-        result = re.sub(r'\[([^\]]*)\]', r'【\1】', result)
-        
-        return result
-    
     def process_stage1(self, keywords_df: pd.DataFrame, workflow_rules: Dict[str, Any], 
                       error_callback=None) -> Dict[str, pd.DataFrame]:
         """处理阶段1：基础分类（Sheet1处理）
@@ -376,8 +350,9 @@ class WorkflowProcessor:
         Returns:
             更新后的文件路径字典
         """
-        # 检查是否有Sheet3及以上规则
-        higher_sheets = [k for k in workflow_rules.keys() if k.startswith('Sheet') and int(k[5:]) >= 3]
+        # 检查是否有Sheet3及以上规则，并按层级排序
+        higher_sheets = sorted([k for k in workflow_rules.keys() if k.startswith('Sheet') and int(k[5:]) >= 3],
+                             key=lambda x: int(x[5:]))
         if not higher_sheets:
             return stage2_files
         
@@ -405,53 +380,73 @@ class WorkflowProcessor:
                     sheet_level = int(sheet_key[5:])
                     sheet_rules = workflow_rules[sheet_key]['rules']
                     
-                    # 使用Excel写入器更新文件
-                    with pd.ExcelWriter(file_path, engine='openpyxl', mode='a') as writer:
-                        # 处理每个sheet
-                        for sheet_name, df in sheet_data.items():
-                            # 创建新的DataFrame用于存储结果
-                            result_df = df.copy()
+                    # 创建新的工作簿用于存储当前层级的结果
+                    new_sheet_data = {}
+                    
+                    # 处理每个sheet
+                    for sheet_name, df in sheet_data.items():
+                        # 创建新的DataFrame用于存储结果
+                        result_df = df.copy()
+                        matched_any = False
+                        
+                        # 处理每条规则
+                        for rule_data in sheet_rules:
+                            rule = rule_data['rule']
+                            col_name = rule_data['sheet_name']
                             
-                            # 处理每条规则
-                            for rule_data in sheet_rules:
-                                rule = rule_data['rule']
-                                col_name = rule_data['sheet_name']
-                                
-                                # 跳过空规则
-                                if not rule or not col_name:
-                                    continue
-                                
-                                # 检查上层分类规则
-                                if sheet_level > 3 and 'parent_rule' in rule_data:
-                                    parent_rule = rule_data['parent_rule']
-                                    if parent_rule != '全' and parent_rule not in result_df.columns:
-                                        # 上层分类规则不存在，跳过
+                            # 跳过空规则
+                            if not rule or not col_name:
+                                continue
+                            
+                            # 检查上层分类规则
+                            if sheet_level > 3 and 'parent_rule' in rule_data:
+                                parent_rule = rule_data['parent_rule']
+                                if parent_rule != '全':
+                                    # 检查父级规则是否存在且有匹配项
+                                    parent_col = next((col for col in result_df.columns 
+                                                     if col.startswith(parent_rule)), None)
+                                    if not parent_col or result_df[parent_col].isna().all():
                                         continue
-                                
-                                # 检查是否为"全"值
-                                if rule == '全':
-                                    # 全部关键词都匹配
-                                    result_df[col_name] = '全部匹配'
-                                else:
-                                    # 设置分类器规则
-                                    self.classifier.set_rules([rule], error_callback)
-                                    
-                                    # 获取关键词列表
-                                    keywords = result_df['关键词'].tolist()
-                                    
-                                    # 分类关键词
-                                    results = self.classifier.classify_keywords(keywords, error_callback)
-                                    
-                                    # 添加结果列
-                                    result_df[col_name] = [r['matched_rules'] for r in results]
                             
+                            # 检查是否为"全"值
+                            if rule == '全':
+                                # 全部关键词都匹配
+                                result_df[col_name] = '全部匹配'
+                                matched_any = True
+                            else:
+                                # 设置分类器规则
+                                self.classifier.set_rules([rule], error_callback)
+                                
+                                # 获取关键词列表
+                                keywords = result_df['关键词'].tolist()
+                                
+                                # 分类关键词
+                                results = self.classifier.classify_keywords(keywords, error_callback)
+                                
+                                # 添加结果列
+                                matched_rules = [r['matched_rules'] for r in results]
+                                if any(matched_rules):
+                                    result_df[col_name] = matched_rules
+                                    matched_any = True
+                        
+                        # 如果有任何规则匹配成功，保存结果
+                        if matched_any:
                             # 限制sheet名长度（Excel限制为31字符）
                             safe_sheet_name = f"{sheet_name[:28]}_{sheet_level}"[:31]
-                            
-                            # 只有当DataFrame不为空时才创建sheet
-                            if not result_df.empty:
-                                # 保存更新后的DataFrame
-                                result_df.to_excel(writer, sheet_name=safe_sheet_name, index=False)
+                            new_sheet_data[safe_sheet_name] = result_df
+                    
+                    # 使用Excel写入器更新文件，一次性写入所有结果
+                    if new_sheet_data:
+                        with pd.ExcelWriter(file_path, engine='openpyxl', mode='a') as writer:
+                            for sheet_name, df in new_sheet_data.items():
+                                df.to_excel(writer, sheet_name=sheet_name, index=False)
+                        
+                        # 更新sheet_data用于下一个层级的处理
+                        sheet_data = new_sheet_data
+            
+            return stage2_files
+        except Exception as e:
+            raise Exception(f"处理阶段3失败: {str(e)}")
             
             return stage2_files
         except Exception as e:

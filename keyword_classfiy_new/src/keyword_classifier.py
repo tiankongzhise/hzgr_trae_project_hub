@@ -241,6 +241,7 @@ class KeywordClassifier:
         return results
     
     def classify_keywords_parallel(self, keywords, error_callback=None, num_processes=None):
+    
         """对关键词进行分类（多进程版本）
         
         Args:
@@ -282,5 +283,32 @@ class KeywordClassifier:
         results = []
         for batch in batch_results:
             results.extend(batch)
+        
+        return results
+
+    def classify_keywords_by_rule(self, keywords, error_callback=None)->dict:
+        """对关键词进行分类（单进程版本）"""
+        results = []
+        
+        # 预处理关键词，清除不可见字符
+        processed_keywords = [self._preprocess_text(keyword, error_callback) for keyword in keywords]
+        
+        for keyword in processed_keywords:
+            matched_rules = []
+            
+            # 对每个关键词应用所有规则
+            for rule_text, rule_matcher in self.parsed_rules:
+                try:
+                    if rule_matcher(keyword):
+                        matched_rules.append(rule_text)
+                        break
+                except Exception as e:
+                    print(f"应用规则 '{rule_text}' 到关键词 '{keyword}' 时出错: {str(e)}")
+            
+            # 添加结果
+            results.append({
+                'keyword': keyword,
+                'matched_rules': self.separator.join(matched_rules) if matched_rules else ''
+            })
         
         return results
