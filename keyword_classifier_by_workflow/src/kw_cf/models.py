@@ -1,4 +1,4 @@
-from pydantic import BaseModel, validator, Field
+from pydantic import BaseModel, field_validator, Field,FieldValidationInfo,model_validator
 
 
 from typing import List, Optional, Callable, Any,Literal,Dict
@@ -133,8 +133,8 @@ class UnclassifiedKeywords(BaseModel):
         None, exclude=True, description="错误信息回调函数"
     )
 
-    @validator("data", pre=True)
-    def processing_pipeline(cls, v: Any, values: dict) -> List[str]:
+    @field_validator("data", mode='before')
+    def processing_pipeline(cls, v: Any, info: FieldValidationInfo) -> List[str]:
         """处理流水线：类型转换 -> 预处理 -> 空值过滤 -> 保序去重"""
 
         # 类型安全转换
@@ -146,11 +146,11 @@ class UnclassifiedKeywords(BaseModel):
 
         keyword_list = [str(item) for item in v]
 
-        values["trace_data"] = keyword_list
+        info.data["trace_data"] = keyword_list
 
         # 预处理流水线
 
-        error_callback = values.get("error_callback")
+        error_callback = info.data.get("error_callback")
 
         processed = [
             _preprocess_text(keyword, error_callback).strip()  # 移除首尾空格
@@ -184,8 +184,8 @@ class SourceRules(BaseModel):
         None, exclude=True, description="错误信息回调函数"
     )
 
-    @validator("data", pre=True)
-    def processing_pipeline(cls, v: Any, values: dict) -> List[str]:
+    @field_validator("data", mode='before')
+    def processing_pipeline(cls, v: Any, info:FieldValidationInfo) -> List[str]:
         """处理流水线：类型转换 -> 预处理 -> 空值过滤 -> 保序去重"""
 
         # 类型安全转换
@@ -197,11 +197,11 @@ class SourceRules(BaseModel):
 
         raw_rules = [str(item) for item in v]
 
-        values["trace_data"] = raw_rules
+        info.data["trace_data"] = raw_rules
 
         # 预处理流水线
 
-        error_callback = values.get("error_callback")
+        error_callback = info.data.get("error_callback")
 
         processed = [
             _preprocess_text(rule, error_callback).strip()  # 移除首尾空格
@@ -225,102 +225,129 @@ class ClassifiedWord(BaseModel):
     matched_rule:str
 
 class WorkFlowRule(BaseModel):
-    source_sheet_name:str = Field(...,min_length=1,description="来源工作表名称")
-    rule:str = Field(...,min_length=1,description="分类规则")
-    output_name:str|None = Field(...,min_length=1,description="分类结果表名称")
-    classified_sheet_name:str|None = Field(None,min_length=1,description="分类结果sheet名称")
-    parent_rule:str|None = Field(None,min_length=1,description="父级规则")
-    level:int|None = Field(None,ge=1,description="工作流层级")
+    '''
+    args:
+        source_sheet_name:来源工作表名称
+        rule:分类规则
+        output_name:分类结果表名称
+        classified_sheet_name:分类结果sheet名称
+        parent_rule:父级规则
+        level:工作流层级
+    '''
+    level:int = Field(...,ge=1,description="工作流层级")# 工作流层级
+    source_sheet_name:str = Field(...,min_length=1,description="来源工作表名称")# 工作流来源工作表名称
+    rule:str = Field(...,min_length=1,description="分类规则")# 分类规则
+    output_name:str = Field(...,min_length=1,description="分类结果表名称")# 分类结果表名称
+    classified_sheet_name:str|None = Field(None,min_length=1,description="分类结果sheet名称")# 分类结果sheet名称
+    parent_rule:str|None = Field(None,min_length=1,description="父级规则")# 父级规则
     
+    
+    @model_validator(mode = 'after')
+    def validate_rules(self)->'WorkFlowRule':
+        """验证工作流规则"""
+        err_msg = []
+        if self.level > 1 and not self.classified_sheet_name:
+            err_msg.append(f"工作流规则 {self.rule} 的流程层级大于1，但没有指定分类结果sheet名称,self is {self}")
+        if self.level > 3 and not self.parent_rule:
+            err_msg.append(f"工作流规则 {self.rule} 的流程层级为2，但指定没有指定父规则,self is {self}")
+
+        if err_msg:
+            raise ValueError("\n".join(err_msg))
+        return self
 
 class WorkFlowRules(BaseModel):
+    '''
+    args:
+        rules:工作流规则列表
+        workFlowRlue:
+            args:
+                source_sheet_name:来源工作表名称
+                rule:分类规则
+                output_name:分类结果表名称
+                classified_sheet_name:分类结果sheet名称
+                parent_rule:父级规则
+                level:工作流层级
+    '''
     rules:List[WorkFlowRule] = Field(...,min_length=1,description="工作流规则") 
     
     def __getitem__(self, key: str) -> 'WorkFlowRules':
         """通过sheet名称获取对应的工作流规则列表"""
-        return WorkFlowRules(rules = [rule for rule in self.rules if rule.source_sheet_name == key])
+        rules = [rule for rule in self.rules if rule.source_sheet_name == key]
+        if rules:
+            return WorkFlowRules(rules=rules)
     
     def get_rules_by_level(self, level: int) -> 'WorkFlowRules':
         """通过层级获取对应的工作流规则列表"""
-        return WorkFlowRules(rules=[rule for rule in self.rules if rule.level == level])
+        rules = [rule for rule in self.rules if rule.level == level]
+        if rules:
+            return WorkFlowRules(rules=rules)
     
     def get_child_rules(self, parent_rule: str) -> 'WorkFlowRules':
         """获取指定父规则的所有子规则"""
-        return WorkFlowRules(rules=[rule for rule in self.rules if rule.parent_rule == parent_rule])
-    
-    # def to_dict(self) -> Dict[str, List[WorkFlowRule]]:
-    #     """将工作流规则转换为字典形式，键为sheet名称，值为对应的工作流规则列表"""
-    #     result = {}
-    #     for rule in self.rules:
-    #         temp = {}
-    #         match rule.level:
-    #             case 1:
-    #                 if result.get(rule.level) is None:
-    #                     result[rule.level] = {rule.output_name:rule.rule}
-    #                 else:
-    #                     if result.get(rule.level).get(rule.output_name) is None:
-    #                         result[rule.level]['rule.output_name'] = rule.rule
-    #                     else:
-    #                         result[rule.level][rule.output_name] = rule.rule
-    #             case 2:
-    #                 if result.get(rule.level) is None:
-    #                     result[rule.level] = {rule.output_name:{rule.classified_sheet_name:rule.rule}}
-    #                 else:
-    #                     result[rule.level].update({rule.output_name:{rule.classified_sheet_name:rule.rule}})
-    #             case 3:
-    #                 if result.get(rule.level) is None:
-    #                     result[rule.level] = {rule.output_name:{rule.classified_sheet_name:rule.rule}}
-    #                 else:
-    #                     result[rule.level].update({rule.output_name:{rule.classified_sheet_name:rule.rule}})
-    #             case _:
-    #                 if result.get(rule.level) is None:
-    #                     result[rule.level] = {rule.output_name:{rule.classified_sheet_name:{rule.parent_rule:rule.rule}}}
-    #                 else:
-    #                     result[rule.level].update({rule.output_name:{rule.classified_sheet_name:{rule.parent_rule:rule.rule}}})
-    #     return result
-    def to_dict(self) -> Dict[int, Dict[str, Any]]:
-        """将工作流规则转换为层级分明的字典结构"""
-        result = {}
-        for rule in self.rules:
-            level = rule.level
-            
-            # 初始化层级结构
-            if level not in result:
-                result[level] = {}
-            
-            # 按不同层级构建结构
-            if level == 1:
-                # 一级规则：output_name -> 规则对象
-                result[level].setdefault(rule.output_name, rule.rule)
-            elif level < 4:
-                # 二级规则：output_name -> {sheet_name -> 规则对象}
-                output_entry = result[level].setdefault(rule.output_name, {})
-                output_entry[rule.classified_sheet_name] = rule.rule
-            elif level >= 4:
-                # 三级及以上规则：output_name -> {sheet_name -> {parent_rule -> 规则}}
-                output_entry = result[level].setdefault(rule.output_name, {})
-                sheet_entry = output_entry.setdefault(rule.classified_sheet_name, {})
-                sheet_entry[rule.parent_rule] = rule.rule
-        return result
-            
+        rules = [rule for rule in self.rules if rule.parent_rule == parent_rule]
+        if rules:
+            return WorkFlowRules(rules=rules)
+    def filter_rules(self, **conditions: Any) -> 'WorkFlowRules':
+        """
+        返回满足任意条件组合的 WorkFlowRule 列表。
+        Conditions:
+            source_sheet_name: 来源工作表名称
+
+            rule: 分类规则
+
+            output_name: 分类结果表名称
+
+            classified_sheet_name: 分类结果sheet名称
+
+            parent_rule: 父级规则
+
+            level: 工作流层级
+
+        Args:
+            **conditions: 条件字典，键为 WorkFlowRule 的字段名，值为期望的值或条件函数。
+                         例如: `source_sheet_name="Sheet1"` 或 `level=lambda x: x > 2`
         
-    
-    @validator("rules")
-    def validate_rules(cls,rules:List[WorkFlowRule]):
+        Returns:
+            WorkFlowRules: 满足条件的WorkFlowRules
+        """
+        filtered_rules = []
+        
+        for rule in self.rules:
+            match = True
+            for field, condition in conditions.items():
+                if not hasattr(rule, field):
+                    raise ValueError(f"Invalid field: '{field}' is not a valid field of WorkFlowRule")
+                
+                value = getattr(rule, field)
+                # 如果条件是函数（如 lambda），则调用它进行判断
+                if callable(condition):
+                    if not condition(value):
+                        match = False
+                        break
+                # 否则直接比较值
+                elif value != condition:
+                    match = False
+                    break
+            
+            if match:
+                filtered_rules.append(rule)
+        
+        return WorkFlowRules(rules=filtered_rules)  
+
+    @model_validator(mode = 'after')    
+    def validate_rules(self)->'WorkFlowRules':
         """验证工作流规则"""
         err_msg = []
-        for rule in rules:
-            if rule.level is None:
-                err_msg.append(f"工作流规则 {rule.rule} 缺少流程层级信息")
-            if rule.level > 1 and rule.classified_sheet_name is None:
-                err_msg.append(f"工作流规则 {rule.rule} 的流程层级大于1，但没有指定分类结果sheet名称")
-            if rule.level > 3 and rule.parent_rule is None:
-                err_msg.append(f"工作流规则 {rule.rule} 的流程层级为2，但指定没有指定父规则")
-            if rule.parent_rule is not None and rule.parent_rule not in [r.rule for r in rules]:
-                err_msg.append(f"工作流规则 {rule.rule} 的父规则 {rule.parent_rule} 不存在")
+        check = []
+        for rule in self.rules:
+            check.append(f'{rule.output_name}-{rule.rule}-{rule.classified_sheet_name}')
+        if len(check) != len(set(check)):
+            count = [ check[i] for i, x in enumerate(check) if check.count(x) > 1]
+            err_msg.append(f"工作流规则有重复{set(count)}")
         if err_msg:
             raise ValueError("\n".join(err_msg))
-        return rules
+        return self
+
 
 class ClassifiedKeyword(BaseModel):
     '''
