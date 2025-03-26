@@ -166,29 +166,26 @@ class WorkFlowProcessor:
             更新后的文件路径字典
         """
         # 检查是否有Sheet2规则
-        if workflow_rules['Sheet2'] is None:
+        if workflow_rules['Sheet2']:
             return stage1_files
         
         try:
             # 获取Sheet2规则
-            sheet2_rules = workflow_rules['Sheet2']['rules']
-            
+            sheet2_rules = workflow_rules.filter_rules(source_sheet_name='Sheet2')
             # 处理每个阶段1文件
             for output_name, file_path in stage1_files.items():
                 # 读取阶段1文件
                 with pd.ExcelFile(file_path) as xls:
-                    stage1_df = pd.read_excel(xls, sheet_name='分类结果')
-                
+                    stage1_df = pd.read_excel(xls, sheet_name='Sheet1')
+                rule_ouput_name_mapping = {}
                 # 使用Excel写入器追加新Sheet
                 with pd.ExcelWriter(file_path, engine='openpyxl', mode='a') as writer:
                     # 处理每条Sheet2规则
-                    for rule_data in sheet2_rules:
-                        rule = rule_data['rule']
-                        sheet_name = rule_data['sheet_name']
-                        
-                        # 跳过空规则
-                        if not rule or not sheet_name:
-                            continue
+                    
+                    for rule_data in sheet2_rules.filter_rules(output_name=output_name).rules:
+                        rule = rule_data.rule
+                        if rule_ouput_name_mapping.get(rule) is None:
+                            rule_ouput_name_mapping[rule] = rule_data.classified_sheet_name
                         
                         # 检查是否为"全"值
                         if rule == '全':
@@ -252,7 +249,6 @@ class WorkFlowProcessor:
             workflow_rules = self.excel_handler.read_workflow_rules(rules_file)
             # 读取待分类文件
             keywords_df = self.excel_handler.read_keyword_file(classification_file)
-            
             # 处理阶段1：基础分类
             stage1_results = self.process_stage1(keywords_df, workflow_rules, error_callback)
             

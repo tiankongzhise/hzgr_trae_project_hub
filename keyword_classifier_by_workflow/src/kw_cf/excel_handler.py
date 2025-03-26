@@ -124,19 +124,20 @@ class ExcelHandler:
                     # 只添加非空规则
                     if not pd.notna(row['分类规则']) or not row['分类规则'].strip():
                         continue
-                    rule_data = WorkFlowRule(
-                        source_sheet_name=sheet_name,
-                        rule=row['分类规则'],
-                        output_name=row['结果文件名称'], 
-                        level=i+1
-                    )
+                    rule_data ={
+                        'source_sheet_name':sheet_name,
+                        'rule':row['分类规则'],
+                        'output_name':row['结果文件名称'], 
+                        'level': i+1
+                    }
                     # 添加额外的列
                     if i > 0 and '分类sheet名称' in df.columns:
-                        rule_data.classified_sheet_name = row['分类sheet名称']
+                        rule_data['classified_sheet_name'] = row['分类sheet名称']
                     
                     if i > 2 and '上层分类规则' in df.columns:
-                        rule_data.parent_rule = row['上层分类规则']
-                    rules_data.append(rule_data)
+                        rule_data['parent_rule'] = row['上层分类规则']
+                    rules_data.append(WorkFlowRule(**rule_data))
+                    rule_data = {}
             return WorkFlowRules(rules = rules_data)
         except Exception as e:
             raise Exception(f"读取工作流规则失败: {str(e)}")
