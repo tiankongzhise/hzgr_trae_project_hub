@@ -250,9 +250,6 @@ class WorkFlowProcessor:
         try:
             # 读取工作流规则
             workflow_rules = self.excel_handler.read_workflow_rules(rules_file)
-            print(workflow_rules.to_dict())
-            print('\n')
-            
             # 读取待分类文件
             keywords_df = self.excel_handler.read_keyword_file(classification_file)
             

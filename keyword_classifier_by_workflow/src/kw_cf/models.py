@@ -1,4 +1,4 @@
-from pydantic import BaseModel, validator, Field
+from pydantic import BaseModel, field_validator, Field,FieldValidationInfo
 
 
 from typing import List, Optional, Callable, Any,Literal,Dict
@@ -133,8 +133,8 @@ class UnclassifiedKeywords(BaseModel):
         None, exclude=True, description="错误信息回调函数"
     )
 
-    @validator("data", pre=True)
-    def processing_pipeline(cls, v: Any, values: dict) -> List[str]:
+    @field_validator("data", mode='before')
+    def processing_pipeline(cls, v: Any, info: FieldValidationInfo) -> List[str]:
         """处理流水线：类型转换 -> 预处理 -> 空值过滤 -> 保序去重"""
 
         # 类型安全转换
@@ -146,11 +146,11 @@ class UnclassifiedKeywords(BaseModel):
 
         keyword_list = [str(item) for item in v]
 
-        values["trace_data"] = keyword_list
+        info.data["trace_data"] = keyword_list
 
         # 预处理流水线
 
-        error_callback = values.get("error_callback")
+        error_callback = info.data.get("error_callback")
 
         processed = [
             _preprocess_text(keyword, error_callback).strip()  # 移除首尾空格
@@ -184,8 +184,8 @@ class SourceRules(BaseModel):
         None, exclude=True, description="错误信息回调函数"
     )
 
-    @validator("data", pre=True)
-    def processing_pipeline(cls, v: Any, values: dict) -> List[str]:
+    @field_validator("data", mode='before')
+    def processing_pipeline(cls, v: Any, info:FieldValidationInfo) -> List[str]:
         """处理流水线：类型转换 -> 预处理 -> 空值过滤 -> 保序去重"""
 
         # 类型安全转换
@@ -197,11 +197,11 @@ class SourceRules(BaseModel):
 
         raw_rules = [str(item) for item in v]
 
-        values["trace_data"] = raw_rules
+        info.data["trace_data"] = raw_rules
 
         # 预处理流水线
 
-        error_callback = values.get("error_callback")
+        error_callback = info.data.get("error_callback")
 
         processed = [
             _preprocess_text(rule, error_callback).strip()  # 移除首尾空格
@@ -305,7 +305,7 @@ class WorkFlowRules(BaseModel):
             
         
     
-    @validator("rules")
+    @field_validator("rules")
     def validate_rules(cls,rules:List[WorkFlowRule]):
         """验证工作流规则"""
         err_msg = []
@@ -316,8 +316,8 @@ class WorkFlowRules(BaseModel):
                 err_msg.append(f"工作流规则 {rule.rule} 的流程层级大于1，但没有指定分类结果sheet名称")
             if rule.level > 3 and rule.parent_rule is None:
                 err_msg.append(f"工作流规则 {rule.rule} 的流程层级为2，但指定没有指定父规则")
-            if rule.parent_rule is not None and rule.parent_rule not in [r.rule for r in rules]:
-                err_msg.append(f"工作流规则 {rule.rule} 的父规则 {rule.parent_rule} 不存在")
+            # if rule.parent_rule is not None and rule.parent_rule not in [r.rule for r in rules]:
+            #     err_msg.append(f"工作流规则 {rule.rule} 的父规则 {rule.parent_rule} 不存在")
         if err_msg:
             raise ValueError("\n".join(err_msg))
         return rules
