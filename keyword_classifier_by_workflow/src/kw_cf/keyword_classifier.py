@@ -1,15 +1,16 @@
 from lark import Lark, Transformer, v_args
-
+from typing import List, Dict, Optional, Callable
 
 from .models import UnclassifiedKeywords, SourceRules,ClassifiedWord
 
 
 class KeywordClassifier:
-    def __init__(self, case_sensitive=False, separator="&"):
+    def __init__(self, case_sensitive=False, separator="&",error_callback:Optional[Callable]=None):
         self.rules = []
         self.parsed_rules = []
         self.case_sensitive = case_sensitive
         self.separator = separator
+        self.error_callback = error_callback
         self.parser = self._create_parser()
 
     def _create_parser(self):
