@@ -50,12 +50,12 @@ class Test:
     def test_workflow_processor(self):
         processor = WorkFlowProcessor()
         result = processor.process_workflow(self.work_flowr_file,self.keyword_file)
-        print(result)
+        return result
     
 
 def main():
     test = Test(
-        keyword_file=Path('data/待分类_1.xlsx'),
+        keyword_file=Path('data/待分类_0.xlsx'),
         rule_file=Path('data/分词规则.xlsx'),
         work_flowr_file=Path('data/工作流规则_1.xlsx'),
         output_dir=Path('result'),  
