@@ -186,9 +186,22 @@ class WorkFlowProcessor:
                 parent_rule_columon_name = '阶段'+str(level-1)
                 if parent_rule_columon_name not in pipeline_data[kwargs['classified_sheet_name']].columns:
                     print(f'classified_sheet_name:{kwargs['classified_sheet_name']},parent_rule_columon_name:{parent_rule_columon_name}不存在，无法进行匹配，pipeline_data[kwargs["classified_sheet_name"]].columns:{pipeline_data[kwargs["classified_sheet_name"]].columns}')
-                    return models.UnclassifiedKeywords(data=[])
-                mask =  pipeline_data[kwargs['classified_sheet_name']][parent_rule_columon_name].isin(set(kwargs['parent_rule']))
+                    return None
+                print(f'pipeline_data[kwargs["classified_sheet_name"]]:{pipeline_data[kwargs["classified_sheet_name"]]}')
+                print(f'kwargs["parent_rule"]:{kwargs["parent_rule"]}')
+                print(f'pipeline_data[kwargs["classified_sheet_name"]][parent_rule_columon_name]:{pipeline_data[kwargs["classified_sheet_name"]][parent_rule_columon_name]}')
+                print(f'set(kwargs["parent_rule"]):{set(kwargs["parent_rule"])}')
+                if isinstance(kwargs['parent_rule'],str):
+                    match_parent_rule = [kwargs['parent_rule']]
+                elif isinstance(kwargs['parent_rule'],list):
+                    match_parent_rule = kwargs['parent_rule']
+                else:
+                    raise Exception(f'parent_rule:{kwargs["parent_rule"]}类型错误')
+
+
+                mask =  pipeline_data[kwargs['classified_sheet_name']][parent_rule_columon_name].isin(set(match_parent_rule))
                 filtered_df  = pipeline_data[kwargs['classified_sheet_name']][mask].copy()
+                print(f'filtered_df:{filtered_df}')
                 if filtered_df.empty:
                     return None
                 return models.UnclassifiedKeywords(data=filtered_df['关键词'].astype(str).tolist())
@@ -615,13 +628,13 @@ class WorkFlowProcessor:
                     continue
                 classified_sheet_name_list = values['classified_sheet_name']
                 # 读取前一阶段分类文件
-                pr_level_df = self.excel_handler.read_stage_results(file_path)
+                pr_level_dict = self.excel_handler.read_stage_results(file_path)
 
                 for classified_sheet_name in classified_sheet_name_list:
                     for parent_rule_name in parent_rule_name_list:
                         #获取需要分类的关键词
                         
-                        unclassified_keyword = self._process_stage_df(pr_level_df,level,classified_sheet_name = classified_sheet_name,parent_rule=parent_rule_name)
+                        unclassified_keyword = self._process_stage_df(pr_level_dict,level,classified_sheet_name = classified_sheet_name,parent_rule=parent_rule_name)
                         print(f'classified_sheet_name:{classified_sheet_name},parent_rule_name:{parent_rule_name},level:{level}，unclassified_keyword:{unclassified_keyword}')
                         if unclassified_keyword is None:
                             continue
@@ -685,7 +698,7 @@ class WorkFlowProcessor:
                         self.add_matched_rule_with_pandas(excel_path = file_path,
                                                         sheet_name = classified_sheet_name,
                                                         keyword_to_rule = keyword_to_rule,
-                                                        new_column_name = '阶段'+str(level-1)
+                                                        new_column_name = '阶段'+str(level)
                                                         )
             return True
         except  Exception as e:
