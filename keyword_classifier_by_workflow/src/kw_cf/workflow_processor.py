@@ -451,12 +451,15 @@ class WorkFlowProcessor:
 
                     if output_name_rules:
                         classified_result = self._get_classified_results(unclassified_keyword,output_name_rules,3,error_callback=error_callback)
-                        if stage3_results == {}:
+                        # if stage3_results == {}:
+                        #     stage3_results[output_name] = {}
+                        # elif stage3_results.get(output_name) is None:
+                        #     stage3_results[output_name] = {}
+                        # else:
+                        #     stage3_results[output_name][classified_sheet_name] = classified_result
+                        if output_name not in stage3_results:
                             stage3_results[output_name] = {}
-                        elif stage3_results.get(output_name) is None:
-                            stage3_results[output_name] = {}
-                        else:
-                            stage3_results[output_name][classified_sheet_name] = classified_result
+                        stage3_results[output_name][classified_sheet_name] = classified_result
                     else:
                         msg = f'找不到{output_name}的Sheet2规则，已经返回'
                         if error_callback:
