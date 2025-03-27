@@ -2,6 +2,7 @@ import pandas as pd
 import datetime
 from pathlib import Path
 from .models import WorkFlowRule,WorkFlowRules,UnclassifiedKeywords
+from typing import  Dict
 
 class ExcelHandler:
     def __init__(self):
@@ -59,7 +60,7 @@ class ExcelHandler:
                 output_dir = output_file.parent
                 # 创建目录
                 output_dir.mkdir(parents=True, exist_ok=True)
-                print(f"已创建或确认输出目录: {output_dir.absolute()}")
+                # print(f"已创建或确认输出目录: {output_dir.absolute()}")
             except PermissionError:
                 # 权限错误时，使用用户目录作为备选
                 user_dir = Path.home()
@@ -169,3 +170,30 @@ class ExcelHandler:
             return UnclassifiedKeywords(data=keywords)
         except Exception as e:
             raise Exception(f"读取待分类文件失败: {str(e)}")
+    def read_stage_results(self, file_path: Path) -> Dict[str,pd.DataFrame]:
+        """读取分类结果文件
+        
+        Args:
+            file_path: 分类结果文件路径
+            
+        Returns:
+            Dict[str:pd.DataFrame]classified_sheet_name:pd.DataFrame
+        """
+        try:
+            # 读取Excel文件的所有sheet
+            excel_file = pd.ExcelFile(file_path)
+            sheet_names = excel_file.sheet_names
+            result = {}
+            
+            for sheet_name in sheet_names:
+                df = pd.read_excel(file_path, sheet_name=sheet_name)
+                if df.empty:
+                    continue
+                if '关键词' not in df.columns:
+                    raise ValueError(f"Sheet '{sheet_name}' 必须包含'关键词'列")
+                result[sheet_name] = df
+            return result
+        except Exception as e:
+            raise Exception(f"读取分类结果文件失败: {str(e)}")
+    
+

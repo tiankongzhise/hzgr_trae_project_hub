@@ -268,7 +268,7 @@ class WorkFlowRules(BaseModel):
                 parent_rule:父级规则
                 level:工作流层级
     '''
-    rules:List[WorkFlowRule] = Field(...,min_length=1,description="工作流规则") 
+    rules:List[WorkFlowRule] = Field(...,min_length=1,description="工作流规则")# 工作流规则
     
     def __getitem__(self, key: str) -> 'WorkFlowRules':
         """通过sheet名称获取对应的工作流规则列表"""
@@ -287,7 +287,8 @@ class WorkFlowRules(BaseModel):
         rules = [rule for rule in self.rules if rule.parent_rule == parent_rule]
         if rules:
             return WorkFlowRules(rules=rules)
-    def filter_rules(self, **conditions: Any) -> 'WorkFlowRules':
+        
+    def filter_rules(self, **conditions: Any) -> Optional['WorkFlowRules']:
         """
         返回满足任意条件组合的 WorkFlowRule 列表。
         Conditions:
@@ -311,7 +312,6 @@ class WorkFlowRules(BaseModel):
             WorkFlowRules: 满足条件的WorkFlowRules
         """
         filtered_rules = []
-        
         for rule in self.rules:
             match = True
             for field, condition in conditions.items():
@@ -319,6 +319,8 @@ class WorkFlowRules(BaseModel):
                     raise ValueError(f"Invalid field: '{field}' is not a valid field of WorkFlowRule")
                 
                 value = getattr(rule, field)
+                
+
                 # 如果条件是函数（如 lambda），则调用它进行判断
                 if callable(condition):
                     if not condition(value):
@@ -328,12 +330,58 @@ class WorkFlowRules(BaseModel):
                 elif value != condition:
                     match = False
                     break
-            
             if match:
                 filtered_rules.append(rule)
+        return WorkFlowRules(rules=filtered_rules) if filtered_rules else None
+    def to_rules_list(self)->List[str]:
+        return [rule.rule for rule in self.rules]
+    
+    def get(
+        self,
+        key:str|int|None = None,
+        source_sheet_name: Optional[str] = None,
+        level: Optional[int] = None,
+        parent_rule: Optional[str] = None,
+        **kwargs: Any
+    ) -> Optional['WorkFlowRules']:
+        """
+        通用筛选方法，支持多种条件组合查询
         
-        return WorkFlowRules(rules=filtered_rules)  
-
+        Args:
+            key:根据key值查询，key可以是int类型，表示层级，也可以是str类型，表示来源工作表名称
+            source_sheet_name: 按来源工作表名称筛选
+            level: 按工作流层级筛选
+            parent_rule: 按父级规则筛选
+            **kwargs: 其他WorkFlowRule字段的筛选条件
+            
+        Returns:
+            符合条件的WorkFlowRules实例，若无匹配则返回None
+        """
+        filtered_rules = self.rules.copy()
+        if key is not None:
+            if isinstance(key, int):
+                level = key
+            elif isinstance(key, str):
+                source_sheet_name = key
+            else:
+                raise ValueError("Invalid key type. Key must be an integer or a string.")
+        
+        # 应用固定条件的筛选
+        if source_sheet_name is not None:
+            filtered_rules = [r for r in filtered_rules if r.source_sheet_name == source_sheet_name]
+        
+        if level is not None:
+            filtered_rules = [r for r in filtered_rules if r.level == level]
+            
+        if parent_rule is not None:
+            filtered_rules = [r for r in filtered_rules if r.parent_rule == parent_rule]
+        
+        # 应用动态字段条件的筛选
+        for field, value in kwargs.items():
+            filtered_rules = [r for r in filtered_rules if getattr(r, field, None) == value]
+        
+        return WorkFlowRules(rules=filtered_rules) if filtered_rules else None
+    
     @model_validator(mode = 'after')    
     def validate_rules(self)->'WorkFlowRules':
         """验证工作流规则"""
@@ -356,14 +404,14 @@ class ClassifiedKeyword(BaseModel):
         keyword:关键词
         matched_rule:匹配的规则
         output_name:输出文件名称
-        output_sheet_name:输出sheet名称
+        classified_sheet_name:输出sheet名称
         parent_rule:父级规则
     '''
     level:int = Field(...,ge=1,description="分类层级")
     keyword:str = Field(...,min_length=1,description="关键词")
     matched_rule:str = Field(...,min_length=1,description="匹配的规则")
     output_name:str = Field(...,min_length=1,description="输出文件名称")
-    output_sheet_name:str|None = Field(None,min_length=1,description="输出sheet名称")
+    classified_sheet_name:str|None = Field(None,min_length=1,description="输出sheet名称")
     parent_rule:str|None = Field(None,min_length=1,description="父级规则")
 
 class UnMatchedKeyword(BaseModel):
@@ -371,13 +419,13 @@ class UnMatchedKeyword(BaseModel):
     args:
         keyword:关键词
         output_name:输出文件名称
-        output_sheet_name:输出sheet名称
+        classified_sheet_name:输出sheet名称
         level:分类层级
         parent_rule:父级规则
     '''
     keyword:str = Field(...,min_length=1,description="关键词")
     output_name:str = Field(...,min_length=1,description="输出文件名称,默认未匹配关键词")
-    output_sheet_name:str = Field("未匹配关键词",min_length=1,description="输出sheet名称，默认Sheet1")
+    classified_sheet_name:str = Field("未匹配关键词",min_length=1,description="输出sheet名称，默认Sheet1")
     level:int = Field(1,ge=1,description="分类层级")
     parent_rule:None = Field(None,description="容错，防止groupby报错")
 
@@ -408,7 +456,7 @@ class ClassifiedResult(BaseModel):
         elif match_type == 'unmatch':
             data = self.unclassified_keywords
         for keyword in data:
-            key = (keyword.output_name, keyword.output_sheet_name or "默认sheet")
+            key = (keyword.output_name, keyword.classified_sheet_name or "默认sheet")
             if key not in result:
                 result[key] = []
             result[key].append(keyword)
@@ -427,7 +475,7 @@ class ClassifiedResult(BaseModel):
         for keyword in data:
             key = (
                 keyword.output_name, 
-                keyword.output_sheet_name or "默认sheet",
+                keyword.classified_sheet_name or "默认sheet",
                 keyword.parent_rule or "无父规则"
             )
             if key not in result:
@@ -456,3 +504,49 @@ class ClassifiedResult(BaseModel):
         return group_methods[group_by](match_type)
     
     
+    def filter(
+        self,
+        *,
+        classified_conditions: Optional[Dict[str, Any]] = None,
+        unclassified_conditions: Optional[Dict[str, Any]] = None,
+        require_all: bool = True
+    ) -> 'ClassifiedResult':
+        """
+        根据条件筛选分类结果
+        
+        Args:
+            classified_conditions: 分类关键词的筛选条件 (字段名: 期望值)
+            unclassified_conditions: 未分类关键词的筛选条件
+            require_all: 是否要求所有条件都满足 (AND 操作)，False 表示满足任一条件即可 (OR 操作)
+            
+        Returns:
+            新的 ClassifiedResult 实例，包含筛选后的结果
+        """
+        def matches(item: BaseModel, conditions: Dict[str, Any]) -> bool:
+            if not conditions:
+                return True
+                
+            comparisons = []
+            for field, expected in conditions.items():
+                actual = getattr(item, field, None)
+                if actual is not None and actual == expected:
+                    comparisons.append(True)
+                else:
+                    comparisons.append(False)
+            
+            return all(comparisons) if require_all else any(comparisons)
+
+        filtered_classified = [
+            kw for kw in self.classified_keywords 
+            if matches(kw, classified_conditions or {})
+        ]
+        
+        filtered_unclassified = [
+            kw for kw in self.unclassified_keywords 
+            if matches(kw, unclassified_conditions or {})
+        ]
+        
+        return ClassifiedResult(
+            classified_keywords=filtered_classified,
+            unclassified_keywords=filtered_unclassified
+        )
