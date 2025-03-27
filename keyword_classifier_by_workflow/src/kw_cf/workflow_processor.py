@@ -185,6 +185,7 @@ class WorkFlowProcessor:
                     )
                 parent_rule_columon_name = '阶段'+str(level-1)
                 if parent_rule_columon_name not in pipeline_data[kwargs['classified_sheet_name']].columns:
+                    print(f'classified_sheet_name:{kwargs['classified_sheet_name']},parent_rule_columon_name:{parent_rule_columon_name}不存在，无法进行匹配，pipeline_data[kwargs["classified_sheet_name"]].columns:{pipeline_data[kwargs["classified_sheet_name"]].columns}')
                     return models.UnclassifiedKeywords(data=[])
                 mask =  pipeline_data[kwargs['classified_sheet_name']][parent_rule_columon_name].isin(set(kwargs['parent_rule']))
                 filtered_df  = pipeline_data[kwargs['classified_sheet_name']][mask].copy()
@@ -585,11 +586,7 @@ class WorkFlowProcessor:
     def process_stage_high(self,level:int)->Dict[str,Dict[str,models.ClassifiedResult]]|None:
         """处理阶段高阶段：工作流三阶段以上
         Args:
-            stage2_results: 阶段2分类结果
-            workflow_rules: 工作流规则字典
             level: 分类级别
-            error_callback: 错误回调函数
-            
         Returns:
             更新后的文件路径字典
         """
@@ -605,7 +602,7 @@ class WorkFlowProcessor:
             level_rules = self.workflow_rules.filter_rules(level=level)
             print(f'level_before:{level_rules}')
             level_rules = self.get_level_rules_v1(level_rules,self.process_result_classified_file)
-            parent_rule_name_list = level_rules.get_parent_rules_name_by_level(level)
+            parent_rule_name_list = list(set(level_rules.get_parent_rules_name_by_level(level)))
             print(f'level:{level}')
             print(f'level_rules_after:{level_rules}')
             print(f'parent_rule_name_list:{parent_rule_name_list}')
@@ -619,12 +616,13 @@ class WorkFlowProcessor:
                 classified_sheet_name_list = values['classified_sheet_name']
                 # 读取前一阶段分类文件
                 pr_level_df = self.excel_handler.read_stage_results(file_path)
-                
+
                 for classified_sheet_name in classified_sheet_name_list:
-                    
                     for parent_rule_name in parent_rule_name_list:
                         #获取需要分类的关键词
+                        
                         unclassified_keyword = self._process_stage_df(pr_level_df,level,classified_sheet_name = classified_sheet_name,parent_rule=parent_rule_name)
+                        print(f'classified_sheet_name:{classified_sheet_name},parent_rule_name:{parent_rule_name},level:{level}，unclassified_keyword:{unclassified_keyword}')
                         if unclassified_keyword is None:
                             continue
 
@@ -668,10 +666,10 @@ class WorkFlowProcessor:
                 file_path = result_dict['file_path']
 
                 
-                for classified_sheet_name,parent_result in stage_high_result[output_name].items():
+                for classified_sheet_name,parent_result in stage_high_result.get(output_name,{}).items():
                     for parent_rule_name,classified_result in parent_result.items():
                         print(f'\n\nclassified_sheet_name: {classified_sheet_name}\n\n')
-                        print(f'\n\parent_rule_name: {parent_rule_name}\n\n')
+                        print(f'\n\nparent_rule_name: {parent_rule_name}\n\n')
                         print(f'\n\nclassified_result: {classified_result}\n\n')
                         if classified_result is None:
                             continue
@@ -689,7 +687,7 @@ class WorkFlowProcessor:
                                                         keyword_to_rule = keyword_to_rule,
                                                         new_column_name = '阶段'+str(level-1)
                                                         )
-                return True
+            return True
         except  Exception as e:
             err_msg = f'保存阶段三分类结果失败：{e}'
             if self.error_callback:
@@ -747,6 +745,7 @@ class WorkFlowProcessor:
                 stage_save_result = self.save_stage_high_results(stage,stage_result)
                 result = {'stage':stage,'result':stage_save_result}
                 stage += 1
+                print(f'stage_result:{stage_result}')
             print(f'result:{result}')
             return result
             
