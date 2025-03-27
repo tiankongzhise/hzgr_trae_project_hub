@@ -2,11 +2,11 @@ import pandas as pd
 import datetime
 from pathlib import Path
 from .models import WorkFlowRule,WorkFlowRules,UnclassifiedKeywords
-from typing import  Dict
+from typing import  Dict,Optional,Callable
 
 class ExcelHandler:
-    def __init__(self):
-        pass
+    def __init__(self,error_callback:Optional[Callable]=None):
+        self.error_callback:Optional[Callable] = error_callback
     def read_rules(self, file_path: Path):
         """从Excel文件中读取分词规则，并进行去重"""
         try:
@@ -196,4 +196,22 @@ class ExcelHandler:
         except Exception as e:
             raise Exception(f"读取分类结果文件失败: {str(e)}")
     
-
+    def read_stage_classified_sheet_name(self, file_path: Dict[str,Path]) -> Dict[str,Dict[str,list[str]|Path]]:
+        """读取分类结果文件
+        
+        Args:
+            file_path: 分类结果文件路径
+            
+        Returns:
+           Dict[str,Dict[str,list[str]|Path]]:Dict[output_name,Dict[file_path,classified_sheet_name]]
+        """
+        try:
+            result = {}
+            for output_name,file_path in file_path.items():
+                # 读取Excel文件的所有sheet
+                excel_file = pd.ExcelFile(file_path)
+                sheet_names = list(excel_file.sheet_names)
+                result[output_name] = {'file_path':file_path, 'classified_sheet_name':sheet_names}
+            return result
+        except Exception as e:
+            raise Exception(f"读取分类结果文件失败: {str(e)}")

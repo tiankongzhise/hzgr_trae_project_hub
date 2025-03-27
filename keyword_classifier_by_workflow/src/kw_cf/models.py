@@ -123,7 +123,7 @@ def _preserve_order_deduplicate(lst: List[str]) -> List[str]:
 
 
 class UnclassifiedKeywords(BaseModel):
-    data: List[str]
+    data: List[str] # 未分类关键词
 
     trace_data: Optional[List[str]] = Field(
         None, exclude=True, description="原始输入关键词（用于审计跟踪）"
@@ -281,13 +281,20 @@ class WorkFlowRules(BaseModel):
         rules = [rule for rule in self.rules if rule.level == level]
         if rules:
             return WorkFlowRules(rules=rules)
-    
+    def get_parent_rules_name_by_level(self, level: int) -> List[str]:
+        """获取指定层级的所有父规则"""
+        parent_rules_name_list = [rule.parent_rule for rule in self.rules if rule.level == level]
+        return parent_rules_name_list
+
     def get_child_rules(self, parent_rule: str) -> 'WorkFlowRules':
         """获取指定父规则的所有子规则"""
         rules = [rule for rule in self.rules if rule.parent_rule == parent_rule]
         if rules:
             return WorkFlowRules(rules=rules)
-        
+    def get_max_level(self)->int:
+        """获取最大层级"""
+        return max([rule.level for rule in self.rules])
+
     def filter_rules(self, **conditions: Any) -> Optional['WorkFlowRules']:
         """
         返回满足任意条件组合的 WorkFlowRule 列表。
@@ -510,7 +517,7 @@ class ClassifiedResult(BaseModel):
         classified_conditions: Optional[Dict[str, Any]] = None,
         unclassified_conditions: Optional[Dict[str, Any]] = None,
         require_all: bool = True
-    ) -> 'ClassifiedResult':
+    ) -> Optional['ClassifiedResult']:
         """
         根据条件筛选分类结果
         
@@ -545,8 +552,8 @@ class ClassifiedResult(BaseModel):
             kw for kw in self.unclassified_keywords 
             if matches(kw, unclassified_conditions or {})
         ]
-        
-        return ClassifiedResult(
-            classified_keywords=filtered_classified,
-            unclassified_keywords=filtered_unclassified
-        )
+        if filtered_classified:
+            return ClassifiedResult(
+                classified_keywords=filtered_classified,
+                unclassified_keywords=filtered_unclassified
+            )
