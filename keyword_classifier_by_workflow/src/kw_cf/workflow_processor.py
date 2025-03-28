@@ -323,7 +323,7 @@ class WorkFlowProcessor:
                 df.to_excel(writer, sheet_name=sheet_name, index=False)   
             return True
         except Exception as e:
-            err_msg = f'add_matched_rule_with_pandas 保存文件失败'
+            err_msg = f'add_matched_rule_with_pandas 保存文件失败{e}'
             raise err_msg
             
             

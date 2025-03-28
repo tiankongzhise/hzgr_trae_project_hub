@@ -1,5 +1,5 @@
 from pydantic import BaseModel, field_validator, Field,FieldValidationInfo,model_validator
-
+from .logger_config import logger
 
 from typing import List, Optional, Callable, Any,Literal,Dict
 
