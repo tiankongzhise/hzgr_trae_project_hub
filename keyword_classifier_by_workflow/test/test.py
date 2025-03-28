@@ -55,9 +55,9 @@ class Test:
 
 def main():
     test = Test(
-        keyword_file=Path('data/待分类_0.xlsx'),
+        keyword_file=Path('data/待分类_百度提示词.xlsx'),
         rule_file=Path('data/分词规则.xlsx'),
-        work_flowr_file=Path('data/工作流规则_1.xlsx'),
+        work_flowr_file=Path('data/工作流规则_否词.xlsx'),
         output_dir=Path('result'),  
     )
     test.test_workflow_processor()

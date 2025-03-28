@@ -1,10 +1,9 @@
 from pathlib import Path
 from .keyword_classifier import KeywordClassifier
 from .excel_handler import ExcelHandler
-from . import models
 from .logger_config import logger
 from typing import List,Dict,TypedDict,Optional,Callable
-
+from . import models
 import pandas as pd
 import datetime
 
@@ -323,7 +322,7 @@ class WorkFlowProcessor:
                 df.to_excel(writer, sheet_name=sheet_name, index=False)   
             return True
         except Exception as e:
-            err_msg = f'add_matched_rule_with_pandas 保存文件失败'
+            err_msg = f'add_matched_rule_with_pandas 保存文件失败{e}'
             raise err_msg
             
             
@@ -738,14 +737,15 @@ class WorkFlowProcessor:
             stage += 1
             max_level = workflow_rules.get_max_level()
             logger.debug(f'max_level: {max_level}')
-            if stage < max_level:
+            if stage <= max_level:
                 # 处理阶段2：将分类细分到各sheet
                 stage2_results = self.process_stage2(stage1_files, workflow_rules, error_callback)
                 # 保存阶段2结果
                 stage2_files = self.save_stage2_results(stage1_files, stage2_results, error_callback)
                 result = {'stage':2,'result':stage2_files}
                 stage += 1
-            if stage < max_level:
+                logger.debug(f'当前工作流层级: {stage},max_level: {max_level}')
+            if stage <= max_level:
                 self.process_result_classified_file = self.excel_handler.read_stage_classified_sheet_name(self.process_result_file)
                 logger.debug(f'self.process_result_classified_file:{self.process_result_classified_file}')
                 # 处理阶段3：分类后处理（Sheet3处理）
@@ -754,6 +754,7 @@ class WorkFlowProcessor:
                 stage3_file = self.save_stage3_results(stage2_file=stage2_files,stage3_results=stage3_results,error_callback=error_callback)
                 result = {'stage':3,'result':stage3_file}
                 stage += 1
+                logger.debug(f'当前工作流层级: {stage},max_level: {max_level}')
             while stage <= max_level:
                 stage_result = self.process_stage_high(stage)
                 stage_save_result = self.save_stage_high_results(stage,stage_result)
