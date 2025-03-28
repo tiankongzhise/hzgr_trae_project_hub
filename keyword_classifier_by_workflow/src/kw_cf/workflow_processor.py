@@ -323,8 +323,63 @@ class WorkFlowProcessor:
             return True
         except Exception as e:
             err_msg = f'add_matched_rule_with_pandas 保存文件失败{e}'
+            if self.error_callback:
+                self.error_callback(err_msg)
             raise err_msg
+    def add_matched_rules_with_pandas(
+        self,
+        excel_path: str,
+        sheet_name: str,
+        column_mappings: Dict[str, Dict[str, str]],
+        keyword_column: str = "关键词"
+    ) -> bool:
+        """
+        使用 pandas 匹配 keyword 并新增多列规则，每列可以有完全独立的列名
+        
+        Args:
+            excel_path: Excel 文件路径
+            sheet_name: 要操作的 sheet 名称
+            column_mappings: 字典，键是新列名，值是该列的关键词到规则的映射
+                           例如: {
+                               "阶段X分类规则": {"苹果": "水果", "香蕉": "水果"},
+                               "阶段X分类标签": {"苹果": "红色", "香蕉": "黄色"},
+                               "形状分类": {"苹果": "圆形", "香蕉": "长形"}
+                           }
+            keyword_column: 用于匹配的关键词列名，默认为"关键词"
+                             
+        Returns:
+            bool: 操作是否成功
             
+        Raises:
+            Exception: 操作失败时抛出异常
+        """
+        try:
+            # 读取原 Excel 文件
+            df = pd.read_excel(excel_path, sheet_name=sheet_name)
+            
+            # 检查关键词列是否存在
+            if keyword_column not in df.columns:
+                raise ValueError(f"数据中不存在指定的关键词列: {keyword_column}")
+            
+            # 为每个列映射添加新列
+            for new_column, rule_map in column_mappings.items():
+                df[new_column] = df[keyword_column].map(rule_map)
+            
+            # 保存回原文件
+            with pd.ExcelWriter(
+                excel_path,
+                engine='openpyxl',
+                mode='a',
+                if_sheet_exists='replace'
+            ) as writer:
+                df.to_excel(writer, sheet_name=sheet_name, index=False)
+                
+            return True
+        except Exception as e:
+            err_msg = f'add_matched_rules_with_pandas 保存文件失败: {str(e)}'
+            if self.error_callback:
+                self.error_callback(err_msg)
+            raise Exception(err_msg)      
             
     def get_level_rules(self,workflow_rules:models.WorkFlowRules,stage_results:Dict,
                                       error_callback=None)->models.WorkFlowRules:

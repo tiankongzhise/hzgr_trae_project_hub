@@ -18,30 +18,10 @@ __all__ = [
 
 def _preprocess_text(text, error_callback=None):
     """预处理文本，清除不可见的干扰字符
-
-
-
-
     Args:
-
-
-
-
         text: 需要预处理的文本
-
-
-
-
         error_callback: 错误回调函数，用于将错误信息传递给UI显示
-
-
-
-
     Returns:
-
-
-
-
         清除干扰字符后的文本
     """
 
@@ -124,12 +104,7 @@ def _preserve_order_deduplicate(lst: List[str]) -> List[str]:
 
 class UnclassifiedKeywords(BaseModel):
     data: List[str] # 未分类关键词
-
-    trace_data: Optional[List[str]] = Field(
-        None, exclude=True, description="原始输入关键词（用于审计跟踪）"
-    )
-
-    error_callback: Optional[Callable[[str], None]] = Field(
+    error_callback: Optional[Callable] = Field(
         None, exclude=True, description="错误信息回调函数"
     )
 
@@ -146,10 +121,7 @@ class UnclassifiedKeywords(BaseModel):
 
         keyword_list = [str(item) for item in v]
 
-        info.data["trace_data"] = keyword_list
-
         # 预处理流水线
-
         error_callback = info.data.get("error_callback")
 
         processed = [
@@ -176,45 +148,42 @@ class SourceRules(BaseModel):
         ..., min_length=1, description="经过预处理、去重且非空的规则列表"
     )
 
-    trace_data: Optional[List[str]] = Field(
-        None, exclude=True, description="原始输入规则（用于审计跟踪）"
-    )
-
-    error_callback: Optional[Callable[[str], None]] = Field(
+    error_callback: Optional[Callable] = Field(
         None, exclude=True, description="错误信息回调函数"
     )
 
     @field_validator("data", mode='before')
     def processing_pipeline(cls, v: Any, info:FieldValidationInfo) -> List[str]:
         """处理流水线：类型转换 -> 预处理 -> 空值过滤 -> 保序去重"""
+        try:
+            # 类型安全转换
 
-        # 类型安全转换
+            if not isinstance(v, (list, tuple, set)):
+                raise ValueError("输入必须是可迭代对象")
 
-        if not isinstance(v, (list, tuple, set)):
-            raise ValueError("输入必须是可迭代对象")
+            # 保留原始数据
 
-        # 保留原始数据
+            raw_rules = [str(item) for item in v]
 
-        raw_rules = [str(item) for item in v]
+            # 预处理流水线
 
-        info.data["trace_data"] = raw_rules
+            error_callback = info.data.get("error_callback")
 
-        # 预处理流水线
+            processed = [
+                _preprocess_text(rule, error_callback).strip()  # 移除首尾空格
+                for rule in raw_rules
+            ]
 
-        error_callback = info.data.get("error_callback")
+            # 空值过滤（包括空白字符）
 
-        processed = [
-            _preprocess_text(rule, error_callback).strip()  # 移除首尾空格
-            for rule in raw_rules
-        ]
+            non_empty = [rule for rule in processed if rule]
 
-        # 空值过滤（包括空白字符）
+            # 保序去重逻辑
 
-        non_empty = [rule for rule in processed if rule]
-
-        # 保序去重逻辑
-
-        return _preserve_order_deduplicate(non_empty)
+            return _preserve_order_deduplicate(non_empty)
+        except Exception as e:
+            logger.error(f"SourceRules的自定义数据校验出错：{e}")  # 记录错误信息到日志
+            raise e
 
     class Config:
         validate_assignment = True
@@ -239,6 +208,7 @@ class WorkFlowRule(BaseModel):
     rule:str = Field(...,min_length=1,description="分类规则")# 分类规则
     output_name:str = Field(...,min_length=1,description="分类结果表名称")# 分类结果表名称
     classified_sheet_name:str|None = Field(None,min_length=1,description="分类结果sheet名称")# 分类结果sheet名称
+    rule_tag:str|None = Field(None,min_length=1,description="规则标签")
     parent_rule:str|None = Field(None,min_length=1,description="父级规则")# 父级规则
     
     
@@ -249,8 +219,9 @@ class WorkFlowRule(BaseModel):
         if self.level > 1 and not self.classified_sheet_name:
             err_msg.append(f"工作流规则 {self.rule} 的流程层级大于1，但没有指定分类结果sheet名称,self is {self}")
         if self.level > 3 and not self.parent_rule:
-            err_msg.append(f"工作流规则 {self.rule} 的流程层级为2，但指定没有指定父规则,self is {self}")
-
+            err_msg.append(f"工作流规则 {self.rule} 的流程层级为{self.level}，但指定没有指定父规则,self is {self}")
+        if self.level >=3 and not self.rule_tag:
+            err_msg.append(f"工作流规则 {self.rule} 的流程层级为{self.level}，但指定没有指定规则标签,self is {self}")
         if err_msg:
             raise ValueError("\n".join(err_msg))
         return self
@@ -309,6 +280,8 @@ class WorkFlowRules(BaseModel):
 
             parent_rule: 父级规则
 
+            rule_tag: 规则标签
+
             level: 工作流层级
 
         Args:
@@ -349,6 +322,7 @@ class WorkFlowRules(BaseModel):
         source_sheet_name: Optional[str] = None,
         level: Optional[int] = None,
         parent_rule: Optional[str] = None,
+        rule_tag: Optional[str] = None,
         **kwargs: Any
     ) -> Optional['WorkFlowRules']:
         """
@@ -359,6 +333,7 @@ class WorkFlowRules(BaseModel):
             source_sheet_name: 按来源工作表名称筛选
             level: 按工作流层级筛选
             parent_rule: 按父级规则筛选
+            rule_tag: 按规则标签筛选
             **kwargs: 其他WorkFlowRule字段的筛选条件
             
         Returns:
@@ -383,6 +358,8 @@ class WorkFlowRules(BaseModel):
         if parent_rule is not None:
             filtered_rules = [r for r in filtered_rules if r.parent_rule == parent_rule]
         
+        if rule_tag is not None:
+            filtered_rules = [r for r in filtered_rules if r.rule_tag == rule_tag]
         # 应用动态字段条件的筛选
         for field, value in kwargs.items():
             filtered_rules = [r for r in filtered_rules if getattr(r, field, None) == value]
@@ -395,7 +372,11 @@ class WorkFlowRules(BaseModel):
         err_msg = []
         check = []
         for rule in self.rules:
-            check.append(f'{rule.output_name}-{rule.rule}-{rule.classified_sheet_name}')
+            if rule.rule_tag is None:
+                rule_tag = ''
+            else:
+                rule_tag = rule.rule_tag
+            check.append(f'{rule.output_name}-{rule.rule}-{rule.classified_sheet_name}-{rule_tag}')
         if len(check) != len(set(check)):
             count = [ check[i] for i, x in enumerate(check) if check.count(x) > 1]
             err_msg.append(f"工作流规则有重复{set(count)}")
@@ -412,6 +393,7 @@ class ClassifiedKeyword(BaseModel):
         matched_rule:匹配的规则
         output_name:输出文件名称
         classified_sheet_name:输出sheet名称
+        rule_tag:规则标签
         parent_rule:父级规则
     '''
     level:int = Field(...,ge=1,description="分类层级")
@@ -420,6 +402,9 @@ class ClassifiedKeyword(BaseModel):
     output_name:str = Field(...,min_length=1,description="输出文件名称")
     classified_sheet_name:str|None = Field(None,min_length=1,description="输出sheet名称")
     parent_rule:str|None = Field(None,min_length=1,description="父级规则")
+    rule_tag:str|None = Field(None,min_length=1,description="规则标签")
+    parent_rule_columon:str|None = Field(None,min_length=1,description="父级规则列名")
+    rule_tag_columon:str|None = Field(None,min_length=1,description="规则标签列名")
 
 class UnMatchedKeyword(BaseModel):
     '''
@@ -429,15 +414,21 @@ class UnMatchedKeyword(BaseModel):
         classified_sheet_name:输出sheet名称
         level:分类层级
         parent_rule:父级规则
+        rule_tag:规则标签
+        parent_rule_columon:父级规则列名
+        rule_tag_columon:规则标签列名
     '''
     keyword:str = Field(...,min_length=1,description="关键词")
     output_name:str = Field(...,min_length=1,description="输出文件名称,默认未匹配关键词")
     classified_sheet_name:str = Field("未匹配关键词",min_length=1,description="输出sheet名称，默认Sheet1")
     level:int = Field(1,ge=1,description="分类层级")
     parent_rule:None = Field(None,description="容错，防止groupby报错")
+    rule_tag:None = Field(None,description="容错，防止groupby报错")
+    parent_rule_columon:None = Field(None,description="容错，防止groupby报错")
+    rule_tag_columon:None = Field(None,description="容错，防止groupby报错")
 
 class ClassifiedResult(BaseModel):
-    classified_keywords: List[ClassifiedKeyword] = Field(..., min_length=1, description="分类结果")
+    classified_keywords: List[ClassifiedKeyword] = Field(..., description="分类结果")
     unclassified_keywords: List[UnMatchedKeyword] = Field(..., description="未分类关键词")
     
     def group_by_output_name(self,match_type:Literal['match','unmatch']='match') -> dict[str, List[ClassifiedKeyword]]:
@@ -552,8 +543,7 @@ class ClassifiedResult(BaseModel):
             kw for kw in self.unclassified_keywords 
             if matches(kw, unclassified_conditions or {})
         ]
-        if filtered_classified:
-            return ClassifiedResult(
-                classified_keywords=filtered_classified,
-                unclassified_keywords=filtered_unclassified
-            )
+        return ClassifiedResult(
+            classified_keywords=filtered_classified,
+            unclassified_keywords=filtered_unclassified
+        )

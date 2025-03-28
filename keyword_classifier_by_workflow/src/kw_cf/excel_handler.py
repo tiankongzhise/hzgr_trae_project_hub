@@ -115,6 +115,8 @@ class ExcelHandler:
                 required_cols = ['分类规则', '结果文件名称']
                 if i > 0:  # Sheet2及以上需要额外的列
                     required_cols.append('分类sheet名称')
+                if i > 1:  # Sheet3及以上需要分类标签
+                    required_cols.append('分类标签')
                 if i > 2:  # Sheet4及以上需要上层分类规则
                     required_cols.append('上层分类规则')
                 
