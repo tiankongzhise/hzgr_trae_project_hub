@@ -4,6 +4,8 @@ import tkinter as tk
 from tkinter import filedialog, ttk, messagebox, scrolledtext
 import threading
 import re
+import logging
+from .logger_config import add_ui_handler, remove_ui_handler, set_ui_handler_level
 
 class KeywordClassifierGUI:
     def __init__(self, root):
@@ -24,6 +26,9 @@ class KeywordClassifierGUI:
         
         # 用于存储日志信息
         self.log_queue = []
+        
+        # 设置UI日志处理器
+        self.ui_handler = add_ui_handler(self.log_callback, level=logging.INFO)
         
     def create_widgets(self):
         # 创建主框架
@@ -58,8 +63,16 @@ class KeywordClassifierGUI:
         separator_entry = ttk.Entry(settings_frame, textvariable=self.separator, width=5)
         separator_entry.grid(row=0, column=2, sticky=tk.W, pady=5)
         
+        # 日志级别设置
+        ttk.Label(settings_frame, text="日志级别:").grid(row=0, column=3, sticky=tk.W, padx=20, pady=5)
+        self.log_level = tk.StringVar(value="INFO")
+        log_level_combo = ttk.Combobox(settings_frame, textvariable=self.log_level, width=10, state="readonly")
+        log_level_combo["values"] = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
+        log_level_combo.grid(row=0, column=4, sticky=tk.W, pady=5)
+        log_level_combo.bind("<<ComboboxSelected>>", self.on_log_level_change)
+        
         # 分隔符提示
-        ttk.Label(settings_frame, text="注意: 分隔符不可以是有实际分词功能的符号 (如空格、逗号等)").grid(row=1, column=0, columnspan=3, sticky=tk.W, pady=5)
+        ttk.Label(settings_frame, text="注意: 分隔符不可以是有实际分词功能的符号 (如空格、逗号等)").grid(row=1, column=0, columnspan=5, sticky=tk.W, pady=5)
         
         # 操作按钮
         button_frame = ttk.Frame(main_frame)
@@ -107,15 +120,42 @@ class KeywordClassifierGUI:
     def error_callback(self, error_message):
         # 这个回调函数会被传递给WorkFlowProcessor
         self.log_queue.append(("ERROR", error_message))
+        
+    def log_callback(self, level, message):
+        """处理来自日志系统的消息
+        
+        Args:
+            level: 日志级别
+            message: 日志消息
+        """
+        self.log_queue.append((level, message))
+    
+    def on_log_level_change(self, event=None):
+        """当日志级别变更时调用"""
+        level_str = self.log_level.get()
+        level_map = {
+            "DEBUG": logging.DEBUG,
+            "INFO": logging.INFO,
+            "WARNING": logging.WARNING,
+            "ERROR": logging.ERROR,
+            "CRITICAL": logging.CRITICAL
+        }
+        level = level_map.get(level_str, logging.INFO)
+        set_ui_handler_level(level)
+        self.log_message(f"日志级别已设置为: {level_str}")
     
     def update_log_from_queue(self):
         if self.log_queue:
             self.log_text.config(state=tk.NORMAL)
             for log_type, message in self.log_queue:
-                if log_type == "ERROR":
-                    self.log_text.insert(tk.END, f"错误: {message}\n", "error")
-                else:
-                    self.log_text.insert(tk.END, f"{message}\n")
+                if log_type == "ERROR" or log_type == "CRITICAL":
+                    self.log_text.insert(tk.END, f"{message}\n", "error")
+                elif log_type == "WARNING":
+                    self.log_text.insert(tk.END, f"{message}\n", "warning")
+                elif log_type == "DEBUG":
+                    self.log_text.insert(tk.END, f"{message}\n", "debug")
+                else:  # INFO and others
+                    self.log_text.insert(tk.END, f"{message}\n", "info")
             self.log_text.see(tk.END)
             self.log_text.config(state=tk.DISABLED)
             self.log_queue.clear()
@@ -168,6 +208,9 @@ class KeywordClassifierGUI:
         
         # 设置日志样式
         self.log_text.tag_configure("error", foreground="red")
+        self.log_text.tag_configure("warning", foreground="orange")
+        self.log_text.tag_configure("info", foreground="black")
+        self.log_text.tag_configure("debug", foreground="gray")
         
         # 开始处理
         self.log_message("开始处理...")
