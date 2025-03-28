@@ -2,6 +2,7 @@ from pathlib import Path
 from .keyword_classifier import KeywordClassifier
 from .excel_handler import ExcelHandler
 from . import models
+from .logger_config import logger
 from typing import List,Dict,TypedDict,Optional,Callable
 
 import pandas as pd
@@ -185,12 +186,12 @@ class WorkFlowProcessor:
                     )
                 parent_rule_columon_name = '阶段'+str(level-1)
                 if parent_rule_columon_name not in pipeline_data[kwargs['classified_sheet_name']].columns:
-                    print(f'classified_sheet_name:{kwargs['classified_sheet_name']},parent_rule_columon_name:{parent_rule_columon_name}不存在，无法进行匹配，pipeline_data[kwargs["classified_sheet_name"]].columns:{pipeline_data[kwargs["classified_sheet_name"]].columns}')
+                    logger.error(f'classified_sheet_name:{kwargs['classified_sheet_name']},parent_rule_columon_name:{parent_rule_columon_name}不存在，无法进行匹配，pipeline_data[kwargs["classified_sheet_name"]].columns:{pipeline_data[kwargs["classified_sheet_name"]].columns}')
                     return None
-                print(f'pipeline_data[kwargs["classified_sheet_name"]]:{pipeline_data[kwargs["classified_sheet_name"]]}')
-                print(f'kwargs["parent_rule"]:{kwargs["parent_rule"]}')
-                print(f'pipeline_data[kwargs["classified_sheet_name"]][parent_rule_columon_name]:{pipeline_data[kwargs["classified_sheet_name"]][parent_rule_columon_name]}')
-                print(f'set(kwargs["parent_rule"]):{set(kwargs["parent_rule"])}')
+                logger.debug(f'pipeline_data[kwargs["classified_sheet_name"]]:{pipeline_data[kwargs["classified_sheet_name"]]}')
+                logger.debug(f'kwargs["parent_rule"]:{kwargs["parent_rule"]}')
+                logger.debug(f'pipeline_data[kwargs["classified_sheet_name"]][parent_rule_columon_name]:{pipeline_data[kwargs["classified_sheet_name"]][parent_rule_columon_name]}')
+                logger.debug(f'set(kwargs["parent_rule"]):{set(kwargs["parent_rule"])}')
                 if isinstance(kwargs['parent_rule'],str):
                     match_parent_rule = [kwargs['parent_rule']]
                 elif isinstance(kwargs['parent_rule'],list):
@@ -201,7 +202,7 @@ class WorkFlowProcessor:
 
                 mask =  pipeline_data[kwargs['classified_sheet_name']][parent_rule_columon_name].isin(set(match_parent_rule))
                 filtered_df  = pipeline_data[kwargs['classified_sheet_name']][mask].copy()
-                print(f'filtered_df:{filtered_df}')
+                logger.debug(f'filtered_df:{filtered_df}')
                 if filtered_df.empty:
                     return None
                 return models.UnclassifiedKeywords(data=filtered_df['关键词'].astype(str).tolist())
@@ -211,7 +212,7 @@ class WorkFlowProcessor:
                     error_callback(msg)
                 raise Exception(msg)            
         except Exception as e:
-            print(f'err_mask:{mask}')
+            logger.debug(f'err_mask:{mask}')
             msg = f"处理阶段性分词结果到待分类关键词：{e}"
             if kwargs.get('error_callback'):
                 kwargs['error_callback'](msg)
@@ -476,7 +477,7 @@ class WorkFlowProcessor:
                 with pd.ExcelWriter(file_path, engine='openpyxl', mode='a') as writer:
                     stage2_result[key] = {'file_path': file_path, 'classified_sheet_name': []}
                     if values is None:
-                        print(f'{key}没有分类结果')
+                        logger.warning(f'{key}没有分类结果')
                         continue
                     for key, classified_keyword_list in values.group_by_output_name_and_sheet(match_type='match').items():
                         output_name,classified_sheet_name = key
@@ -574,7 +575,7 @@ class WorkFlowProcessor:
                 if result_dict == {}:
                     continue
                 file_path = stage2_file[output_name]['file_path']
-                print(f'file_path:{file_path}')
+                logger.debug(f'file_path:{file_path}')
                 
                 for classified_sheet_name,classified_result in result_dict.items():
                     if classified_result is None:
@@ -613,12 +614,12 @@ class WorkFlowProcessor:
         try:
             # 获取分类流程的规则
             level_rules = self.workflow_rules.filter_rules(level=level)
-            print(f'level_before:{level_rules}')
+            logger.debug(f'level_before:{level_rules}')
             level_rules = self.get_level_rules_v1(level_rules,self.process_result_classified_file)
             parent_rule_name_list = list(set(level_rules.get_parent_rules_name_by_level(level)))
-            print(f'level:{level}')
-            print(f'level_rules_after:{level_rules}')
-            print(f'parent_rule_name_list:{parent_rule_name_list}')
+            logger.debug(f'level:{level}')
+            logger.debug(f'level_rules_after:{level_rules}')
+            logger.debug(f'parent_rule_name_list:{parent_rule_name_list}')
             level_results = {}
             
             # 处理每个阶段1文件
@@ -635,7 +636,7 @@ class WorkFlowProcessor:
                         #获取需要分类的关键词
                         
                         unclassified_keyword = self._process_stage_df(pr_level_dict,level,classified_sheet_name = classified_sheet_name,parent_rule=parent_rule_name)
-                        print(f'classified_sheet_name:{classified_sheet_name},parent_rule_name:{parent_rule_name},level:{level}，unclassified_keyword:{unclassified_keyword}')
+                        logger.debug(f'classified_sheet_name:{classified_sheet_name},parent_rule_name:{parent_rule_name},level:{level}，unclassified_keyword:{unclassified_keyword}')
                         if unclassified_keyword is None:
                             continue
 
@@ -681,9 +682,9 @@ class WorkFlowProcessor:
                 
                 for classified_sheet_name,parent_result in stage_high_result.get(output_name,{}).items():
                     for parent_rule_name,classified_result in parent_result.items():
-                        print(f'\n\nclassified_sheet_name: {classified_sheet_name}\n\n')
-                        print(f'\n\nparent_rule_name: {parent_rule_name}\n\n')
-                        print(f'\n\nclassified_result: {classified_result}\n\n')
+                        logger.debug(f'\n\nclassified_sheet_name: {classified_sheet_name}\n\n')
+                        logger.debug(f'\n\nparent_rule_name: {parent_rule_name}\n\n')
+                        logger.debug(f'\n\nclassified_result: {classified_result}\n\n')
                         if classified_result is None:
                             continue
                         # 构建 keyword 到 matched_rule 的映射
@@ -694,7 +695,7 @@ class WorkFlowProcessor:
                             kw.keyword: kw.matched_rule 
                             for kw in filtered_result.classified_keywords
                         }
-                        print(f'\n\nkeyword_to_rule: {keyword_to_rule}\n\n')
+                        logger.debug(f'\n\nkeyword_to_rule: {keyword_to_rule}\n\n')
                         self.add_matched_rule_with_pandas(excel_path = file_path,
                                                         sheet_name = classified_sheet_name,
                                                         keyword_to_rule = keyword_to_rule,
@@ -724,7 +725,7 @@ class WorkFlowProcessor:
             # 读取工作流规则
             workflow_rules = self.excel_handler.read_workflow_rules(rules_file)
             self.workflow_rules = workflow_rules
-            print(f'self.workflow_rules: {self.workflow_rules}')    
+            logger.debug(f'self.workflow_rules: {self.workflow_rules}')    
             # 读取待分类文件
             keywords_df = self.excel_handler.read_keyword_file(classification_file)
             # 处理阶段1：基础分类,将词分类到各xlsx文件中
@@ -736,7 +737,7 @@ class WorkFlowProcessor:
             result = {'stage':1,'result':stage1_files}
             stage += 1
             max_level = workflow_rules.get_max_level()
-            print(f'max_level: {max_level}')
+            logger.debug(f'max_level: {max_level}')
             if stage < max_level:
                 # 处理阶段2：将分类细分到各sheet
                 stage2_results = self.process_stage2(stage1_files, workflow_rules, error_callback)
@@ -746,7 +747,7 @@ class WorkFlowProcessor:
                 stage += 1
             if stage < max_level:
                 self.process_result_classified_file = self.excel_handler.read_stage_classified_sheet_name(self.process_result_file)
-                print(f'self.process_result_classified_file:{self.process_result_classified_file}')
+                logger.debug(f'self.process_result_classified_file:{self.process_result_classified_file}')
                 # 处理阶段3：分类后处理（Sheet3处理）
                 stage3_results = self.process_stage3(stage2_files, workflow_rules, error_callback)
                 
@@ -758,8 +759,8 @@ class WorkFlowProcessor:
                 stage_save_result = self.save_stage_high_results(stage,stage_result)
                 result = {'stage':stage,'result':stage_save_result}
                 stage += 1
-                print(f'stage_result:{stage_result}')
-            print(f'result:{result}')
+                logger.debug(f'stage_result:{stage_result}')
+            logger.debug(f'result:{result}')
             return result
             
 

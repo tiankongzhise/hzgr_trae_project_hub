@@ -83,7 +83,7 @@ def _preprocess_text(text, error_callback=None):
         if code_point in invisible_chars:
             msg = f"发现不可见字符: U+{code_point:04X} 在规则 '{text}' 中"
 
-            print(msg)
+            logger.debug(msg)
 
             if error_callback:
                 error_callback(msg)
@@ -102,9 +102,9 @@ def _preprocess_text(text, error_callback=None):
 
         msg2 = f"清理后: '{cleaned_rule}' (长度: {len(cleaned_rule)})"
 
-        print(msg1)
+        logger.debug(msg1)
 
-        print(msg2)
+        logger.debug(msg2)
 
         if error_callback:
             error_callback(msg1)

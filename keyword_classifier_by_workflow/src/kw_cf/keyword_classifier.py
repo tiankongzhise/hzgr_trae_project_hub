@@ -124,7 +124,7 @@ class KeywordClassifier:
 
                 parse_errors.append(error_msg)
 
-                print(error_msg)  # 保留控制台输出
+                logger.error(error_msg)
 
                 # 如果提供了错误回调函数，则调用它
 
@@ -153,7 +153,7 @@ class KeywordClassifier:
                         matched_rules.append(rule_text)
                         break
                 except Exception as e:
-                    print(
+                    logger.debug(
                         f"应用规则 '{rule_text}' 到关键词 '{keyword}' 时出错: {str(e)}"
                     )
 

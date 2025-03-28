@@ -3,6 +3,7 @@ import datetime
 from pathlib import Path
 from .models import WorkFlowRule,WorkFlowRules,UnclassifiedKeywords
 from typing import  Dict,Optional,Callable
+from .logger_config import logger
 
 class ExcelHandler:
     def __init__(self,error_callback:Optional[Callable]=None):
@@ -60,18 +61,18 @@ class ExcelHandler:
                 output_dir = output_file.parent
                 # 创建目录
                 output_dir.mkdir(parents=True, exist_ok=True)
-                # print(f"已创建或确认输出目录: {output_dir.absolute()}")
+                logger.debug(f"已创建或确认输出目录: {output_dir.absolute()}")
             except PermissionError:
                 # 权限错误时，使用用户目录作为备选
                 user_dir = Path.home()
                 current_time = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
                 output_file = user_dir / f"关键词分类结果_{current_time}.xlsx"
-                print(f"无法创建原目录，将保存到用户目录: {output_file}")
+                logger.warning(f"无法创建原目录，将保存到用户目录: {output_file}")
             except Exception as e:
                 # 其他错误时，保存到当前目录
                 current_time = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
                 output_file = Path(f"关键词分类结果_{current_time}.xlsx")
-                print(f"创建目录时出错: {str(e)}，将保存到当前目录: {output_file}")
+                logger.error(f"创建目录时出错: {str(e)}，将保存到当前目录: {output_file}")
             
             # 保存到Excel
             result_df.to_excel(output_file, index=False, sheet_name=sheet_name)
