@@ -1,8 +1,10 @@
 from pathlib import Path
+
+from pandas.io import excel
 from .keyword_classifier import KeywordClassifier
 from .excel_handler import ExcelHandler
 from .logger_config import logger
-from typing import List,Dict,TypedDict,Optional,Callable
+from typing import List,Dict,TypedDict,Optional,Callable,cast
 from . import models
 import pandas as pd
 import datetime
@@ -26,7 +28,7 @@ class WorkFlowProcessor:
             excel_handler: Excel处理器实例，如果为None则创建新实例
         """
         self.excel_handler:ExcelHandler = excel_handler or ExcelHandler(error_callback)
-        self.classifier:KeywordClassifier = keyword_classifier or KeywordClassifier(error_callback)
+        self.classifier:KeywordClassifier = keyword_classifier or KeywordClassifier(error_callback=error_callback)
         self.error_callback:Optional[Callable] = error_callback
         self.workflow_rules:Optional[models.WorkFlowRules] = None
         self.process_result_file:Optional[Dict[str,pd.DataFrame]] = None
@@ -69,10 +71,10 @@ class WorkFlowProcessor:
         return map_func[type(data[0])](data)
         
         
-    def _trans_words_to_cassified_result(self,classify_result:List[models.ClassifiedKeyword],mapping_dict:dict)->Optional[models.ClassifiedResult]:
+    def _trans_words_to_cassified_result(self,classify_result:List[models.ClassifiedWord],mapping_dict:dict)->Optional[models.ClassifiedResult]:
+        classified_keywords = []
+        unclassified_keywords = []
         try:
-            classified_keywords = []
-            unclassified_keywords = []
             # 处理分类结果
             for temp in classify_result:
                 keyword = temp.keyword
@@ -159,6 +161,7 @@ class WorkFlowProcessor:
         return classified_reuslt
         
     def _process_stage_df(self,pipeline_data:Dict[str,pd.DataFrame],level:int,**kwargs)->models.UnclassifiedKeywords:
+        mask = None
         try:
             error_callback = kwargs.get('error_callback')
             if level == 2:
@@ -167,14 +170,15 @@ class WorkFlowProcessor:
                     if error_callback:
                         error_callback(msg)
                     raise Exception(msg)
-                return models.UnclassifiedKeywords(data=pipeline_data['Sheet1']['关键词'].astype(str).tolist(),error_callback=error_callback)
+                
+                return models.UnclassifiedKeywords(data=cast(List[str], pipeline_data['Sheet1']['关键词'].astype(str).tolist()),error_callback=error_callback) #noqa
             elif level == 3:
                 if kwargs is None or kwargs.get('classified_sheet_name') is None:
                     msg = '第三阶段关键词分类，_process_stage_df未传入必要的classified_sheet_name参数'
                     if error_callback:
                         error_callback(msg)
                     raise Exception(msg)
-                return models.UnclassifiedKeywords(data=pipeline_data[kwargs['classified_sheet_name']]['关键词'].astype(str).tolist(),error_callback=error_callback)
+                return models.UnclassifiedKeywords(data=cast(List[str],pipeline_data[kwargs['classified_sheet_name']]['关键词'].astype(str).tolist()),error_callback=error_callback)
             elif level >3:
                 # 检查 level > 3 时是否传入了必要参数
                 required_args = ["classified_sheet_name", "parent_rule"]
@@ -185,33 +189,37 @@ class WorkFlowProcessor:
                     )
                 parent_rule_columon_name = '阶段'+str(level-1)
                 if parent_rule_columon_name not in pipeline_data[kwargs['classified_sheet_name']].columns:
-                    logger.error(f'classified_sheet_name:{kwargs['classified_sheet_name']},parent_rule_columon_name:{parent_rule_columon_name}不存在，无法进行匹配，pipeline_data[kwargs["classified_sheet_name"]].columns:{pipeline_data[kwargs["classified_sheet_name"]].columns}')
-                    return None
+                    err_msg = f'classified_sheet_name:{kwargs['classified_sheet_name']},parent_rule_columon_name:{parent_rule_columon_name}不存在，无法进行匹配，pipeline_data[kwargs["classified_sheet_name"]].columns:{pipeline_data[kwargs["classified_sheet_name"]].columns}'
+                    if error_callback:
+                        error_callback(err_msg)
+                    logger.error(err_msg)
+                    raise Exception(err_msg)
                 logger.debug(f'pipeline_data[kwargs["classified_sheet_name"]]:{pipeline_data[kwargs["classified_sheet_name"]]}')
                 logger.debug(f'kwargs["parent_rule"]:{kwargs["parent_rule"]}')
                 logger.debug(f'pipeline_data[kwargs["classified_sheet_name"]][parent_rule_columon_name]:{pipeline_data[kwargs["classified_sheet_name"]][parent_rule_columon_name]}')
                 logger.debug(f'set(kwargs["parent_rule"]):{set(kwargs["parent_rule"])}')
                 if isinstance(kwargs['parent_rule'],str):
-                    match_parent_rule = [kwargs['parent_rule']]
+                    match_parent_rule:List[str] = [kwargs['parent_rule']]
                 elif isinstance(kwargs['parent_rule'],list):
-                    match_parent_rule = kwargs['parent_rule']
+                    match_parent_rule:List[str] = kwargs['parent_rule']
                 else:
                     raise Exception(f'parent_rule:{kwargs["parent_rule"]}类型错误')
 
 
-                mask =  pipeline_data[kwargs['classified_sheet_name']][parent_rule_columon_name].isin(set(match_parent_rule))
+                mask =  pipeline_data[kwargs['classified_sheet_name']][parent_rule_columon_name].isin(list(set(match_parent_rule)))
                 filtered_df  = pipeline_data[kwargs['classified_sheet_name']][mask].copy()
                 logger.debug(f'filtered_df:{filtered_df}')
                 if filtered_df.empty:
-                    return None
-                return models.UnclassifiedKeywords(data=filtered_df['关键词'].astype(str).tolist())
+                    return models.UnclassifiedKeywords(data=[],error_callback=self.error_callback)
+                return models.UnclassifiedKeywords(data=cast(List[str],filtered_df['关键词'].astype(str).tolist()),error_callback=self.error_callback)
             else:
                 msg = f'第{level}尚未实现相关功能！'
                 if error_callback:
                     error_callback(msg)
                 raise Exception(msg)            
         except Exception as e:
-            logger.debug(f'err_mask:{mask}')
+            if mask is not None:
+                logger.debug(f'err_mask:{mask}')
             msg = f"处理阶段性分词结果到待分类关键词：{e}"
             if kwargs.get('error_callback'):
                 kwargs['error_callback'](msg)
@@ -552,7 +560,7 @@ class WorkFlowProcessor:
                 error_callback(err_msg)
             raise Exception(f"保存分类成功的关键词失败：{e}")
     def process_stage3(self, stage2_results: Dict[str,Dict[str,list]], workflow_rules: models.WorkFlowRules, 
-                      error_callback=None) -> Dict[str,Dict[str,models.ClassifiedResult]]:
+                      error_callback=None) -> Optional[Dict[str,Dict[str,models.ClassifiedResult]]]:
         """处理阶段3：分类后处理（Sheet3处理）
         
         Args:
@@ -563,12 +571,12 @@ class WorkFlowProcessor:
         Returns:
             更新后的文件路径字典
         """
-                # 检查是否有Sheet2规则
+        # 检查是否有Sheet3规则
         if workflow_rules.get('Sheet3') is None:
             msg = '找不到Sheet3规则，已经返回'
             if error_callback:
                 error_callback(msg)
-            return msg
+            return None
         
         try:
             # 获取分类流程3的规则
@@ -614,7 +622,7 @@ class WorkFlowProcessor:
             raise Exception(f"处理阶段3失败: {str(e)}")
     
       
-    def save_stage3_results(self, stage2_file:Dict[str,Stage2OutputNameDict],stage3_results:Dict[str,Dict[str,models.ClassifiedResult]], error_callback=None) -> dict[str, Path]:
+    def save_stage3_results(self, stage2_file:Dict[str,Stage2OutputNameDict],stage3_results:Optional[Dict[str,Dict[str,models.ClassifiedResult]]], error_callback=None) -> dict[str, Path]:
         """保存阶段3分类结果
         
         Args:
@@ -624,6 +632,10 @@ class WorkFlowProcessor:
         Returns:
             保存的文件路径字典
         """
+        if stage3_results is None:
+            logger.warning('stage3返回了None,可能是没有Sheet3规则')
+            return stage2_file
+
         try:
             for output_name,result_dict in stage3_results.items():
                 if result_dict == {}:

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, field_validator, Field,FieldValidationInfo,model_validator
+from pydantic import BaseModel, field_validator, Field,ValidationInfo,model_validator
 from .logger_config import logger
 
 from typing import List, Optional, Callable, Any,Literal,Dict
@@ -104,12 +104,12 @@ def _preserve_order_deduplicate(lst: List[str]) -> List[str]:
 
 class UnclassifiedKeywords(BaseModel):
     data: List[str] # 未分类关键词
-    error_callback: Optional[Callable] = Field(
+    error_callback: Optional[Callable[..., Any]] = Field(
         None, exclude=True, description="错误信息回调函数"
     )
 
     @field_validator("data", mode='before')
-    def processing_pipeline(cls, v: Any, info: FieldValidationInfo) -> List[str]:
+    def processing_pipeline(cls, v: Any, info: ValidationInfo) -> List[str]:
         """处理流水线：类型转换 -> 预处理 -> 空值过滤 -> 保序去重"""
 
         # 类型安全转换
@@ -153,7 +153,7 @@ class SourceRules(BaseModel):
     )
 
     @field_validator("data", mode='before')
-    def processing_pipeline(cls, v: Any, info:FieldValidationInfo) -> List[str]:
+    def processing_pipeline(cls, v: Any, info:ValidationInfo) -> List[str]:
         """处理流水线：类型转换 -> 预处理 -> 空值过滤 -> 保序去重"""
         try:
             # 类型安全转换
@@ -241,23 +241,23 @@ class WorkFlowRules(BaseModel):
     '''
     rules:List[WorkFlowRule] = Field(...,min_length=1,description="工作流规则")# 工作流规则
     
-    def __getitem__(self, key: str) -> 'WorkFlowRules':
+    def __getitem__(self, key: str) -> Optional['WorkFlowRules']:
         """通过sheet名称获取对应的工作流规则列表"""
         rules = [rule for rule in self.rules if rule.source_sheet_name == key]
         if rules:
             return WorkFlowRules(rules=rules)
     
-    def get_rules_by_level(self, level: int) -> 'WorkFlowRules':
+    def get_rules_by_level(self, level: int) -> Optional['WorkFlowRules']:
         """通过层级获取对应的工作流规则列表"""
         rules = [rule for rule in self.rules if rule.level == level]
         if rules:
             return WorkFlowRules(rules=rules)
     def get_parent_rules_name_by_level(self, level: int) -> List[str]:
         """获取指定层级的所有父规则"""
-        parent_rules_name_list = [rule.parent_rule for rule in self.rules if rule.level == level]
+        parent_rules_name_list = [rule.parent_rule for rule in self.rules if rule.level == level and rule.parent_rule]
         return parent_rules_name_list
 
-    def get_child_rules(self, parent_rule: str) -> 'WorkFlowRules':
+    def get_child_rules(self, parent_rule: str) -> Optional['WorkFlowRules']:
         """获取指定父规则的所有子规则"""
         rules = [rule for rule in self.rules if rule.parent_rule == parent_rule]
         if rules:
