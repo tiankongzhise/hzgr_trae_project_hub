@@ -481,7 +481,7 @@ class ClassifiedResult(BaseModel):
             result[key].append(keyword)
         return result
     
-    def get_grouped_keywords(self, group_by: Literal['output_name','sheet','parent_rule'] = "output_name",match_type:Literal['match','unmatch']='match') -> dict[str|tuple,List[ClassifiedKeyword|UnclassifiedKeywords]]:
+    def get_grouped_keywords(self, group_by: Literal['output_name','sheet','parent_rule'] = "output_name",match_type:Literal['match','unmatch']='match') -> dict[str|tuple,List[ClassifiedKeyword|UnMatchedKeyword]]:
         """获取聚类结果
         
         Args:
@@ -547,3 +547,18 @@ class ClassifiedResult(BaseModel):
             classified_keywords=filtered_classified,
             unclassified_keywords=filtered_unclassified
         )
+
+class StageSaveResult(BaseModel):
+    '''
+    args:
+        stage:int 阶段
+        status:str 处理结果
+        next_stage:int 下一个阶段名称
+        file_path:dict 文件路径
+        message:str|None 错误信息
+    '''
+    stage:int = Field(...,ge=1,description="阶段")# 阶段
+    status:Literal["success", "fail", "warning"] = Field(...,description="处理结果")# 处理结果
+    next_stage:int = Field(...,ge=1,description="下一个阶段名称")# 下一个阶段名称
+    file_path:Dict = Field(...,description="文件路径")# 文件路径
+    message:str|None = Field(None,description="错误信息")# 错误信息

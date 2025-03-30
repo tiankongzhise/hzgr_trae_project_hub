@@ -1,6 +1,5 @@
 from pathlib import Path
 
-from pandas.io import excel
 from .keyword_classifier import KeywordClassifier
 from .excel_handler import ExcelHandler
 from .logger_config import logger
@@ -9,6 +8,21 @@ from . import models
 import pandas as pd
 import datetime
 
+
+class StageOneRestsultTypeDict(TypedDict):
+    code:str
+    level:int
+    next_stage:int
+    file_path:Dict[str,Path]
+    message:str
+
+    
+class StageTwoRestsultTypeDict(TypedDict):
+    ...
+class StageThreeRestsultTypeDict(TypedDict):
+    ...
+class StageHighResultTypeDict(TypedDict):
+    ...
 class Stage2OutputNameDict(TypedDict):
     file_path:str
     classified_sheet_name:List[str]
@@ -417,15 +431,26 @@ class WorkFlowProcessor:
         try:
             # 获取一阶段分类规则
             stage1_rules = workflow_rules.get_rules_by_level(1)
-            return self._get_classified_results(keywords,stage1_rules,1,error_callback = error_callback)
-
+            if stage1_rules is None:
+                msg = '第一阶段关键词分类规则为空'
+                if error_callback:
+                    error_callback(msg)
+                raise Exception(msg)
+            # 分类关键词
+            result = self._get_classified_results(keywords,stage1_rules,1,error_callback = error_callback)
+            if result is None:
+                msg = '第一阶段关键词分类结果为空'
+                if error_callback:
+                    error_callback(msg)
+                raise Exception(msg)
+            return result
         except Exception as e:
             msg = f"获取一阶段分类规则失败：{e}"
             if error_callback:
                 error_callback(f"获取一阶段分类规则失败：{e}")
             raise Exception(msg) from e
 
-    def save_stage1_results(self,classified_result:models.ClassifiedResult,error_callback=None)->dict[str,Path]:
+    def save_stage1_results(self,classified_result:models.ClassifiedResult,error_callback=None)->StageOneRestsultTypeDict:
         """保存第一阶段分类结果
         
         Args:
@@ -435,7 +460,10 @@ class WorkFlowProcessor:
         Returns:
             保存的文件路径字典
         """
-        success_file_paths = {}
+        result = {
+            code:None,
+        }
+        success_file_paths:Dict[str,Path] = {}
         try:
             # 获取分类结果
             unmatched_keywords = classified_result.get_grouped_keywords(group_by='output_name',match_type='unmatch')
@@ -457,10 +485,10 @@ class WorkFlowProcessor:
             try:
                 if matched_keywords:
                     for output_name, matched_keyword_list in matched_keywords.items():
-                        output_file = self.output_dir / f'{output_name}_{datetime.datetime.now().strftime("%Y%m%d%H%M%S")}.xlsx'
+                        output_file:Path = self.output_dir / f'{output_name}_{datetime.datetime.now().strftime("%Y%m%d%H%M%S")}.xlsx'
                         df = self._transform_to_df(matched_keyword_list)
                         self.excel_handler.save_results(df, output_file,sheet_name='Sheet1')
-                        success_file_paths[output_name] = output_file
+                        success_file_paths[cast(str,output_name)] = output_file
                     return success_file_paths
             except Exception as e:
                 err_msg = f'保存分类成功的关键词失败：{e}'
