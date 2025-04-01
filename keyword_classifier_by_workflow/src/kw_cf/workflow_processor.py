@@ -821,9 +821,9 @@ class WorkFlowProcessor:
             self.workflow_rules = workflow_rules
             logger.debug(f'self.workflow_rules: {self.workflow_rules}')    
             # 读取待分类文件
-            keywords_df = self.excel_handler.read_keyword_file(classification_file)
+            unclassified_keywords = self.excel_handler.read_keyword_file(classification_file)
             # 处理阶段1：基础分类,将词分类到各xlsx文件中
-            stage1_results = self.process_stage1(keywords_df, workflow_rules, error_callback)
+            stage1_results = self.process_stage1(unclassified_keywords, workflow_rules, error_callback)
             
             # 保存阶段1结果
             stage1_files = self.save_stage1_results(stage1_results)
