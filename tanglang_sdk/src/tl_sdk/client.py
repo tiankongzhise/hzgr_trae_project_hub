@@ -10,7 +10,7 @@ from .models import KeyChoice
 
 load_dotenv()
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 
@@ -27,10 +27,14 @@ class ResponseBaseDTO:
             'data': self.data
         }
 
-class TangLangClient(object):
+class TangLangBaseClient(object):
     _post_url_mapping = {
         '/ShiXinCustomerCon/queryCustomerByIdOwner':'key2',
-        '/ShiXinCustomerCon/queryCustomerByIdOrPhone':'key2'
+        '/ShiXinCustomerCon/queryCustomerByIdOrPhone':'key2',
+        '/ShiXinCustomerCon/queryCustomerPageList':'key2',
+        '/scrmCustomerApiCon/querySimpleCustomerPageList':'key2',
+        '/scrmCustomerApiCon/queryCustomerPageList':'key2',
+        '/ShiXinVisitCon/queryVisitList':'key2',
     }
     
     
@@ -60,7 +64,7 @@ class TangLangClient(object):
         return int(datetime.now().timestamp() * 1000)
     def create_token(self,timestamp:int,key: KeyChoice)->str:
         key = f"{getattr(self,key.data)}{timestamp}"
-        self.token = TangLangClient.md5(key)
+        self.token = TangLangBaseClient.md5(key)
         return self.token
     
     def create_key_choice(self,key: Literal['key1','key2'])->KeyChoice:
@@ -69,6 +73,8 @@ class TangLangClient(object):
     def create_common_query(self,key: KeyChoice)-> Dict[str, int|str]:
         timestamp = self.create_timestamp()
         token = self.create_token(timestamp,key)
+        logger.debug(f'timestamp:{timestamp}')
+        logger.debug(f'token:{token}')
         return {
             'time': timestamp,
             'companyId': self.company_id,
@@ -108,7 +114,7 @@ class TangLangClient(object):
             req_url,
             headers=headers,
             json=params,
-            timeout=3  # 3 seconds for both connect and read
+            timeout=10 # 10 seconds for both connect and read
         )
             if response.status_code == 200:
                 resp_text = response.text
@@ -132,19 +138,53 @@ class TangLangClient(object):
         except Exception as e:
             logger.error("base_req-ERROR:", exc_info=True)
             return ResponseBaseDTO(-99, f"接口请求失败，ERROR:{str(e)}") 
+
+class TangLangClient(TangLangBaseClient):
+    def __init__(self, company_id:int = 0,key1: str ='',key2: str='',host1:str='',host2:str=''):
+        super().__init__(company_id=company_id,key1=key1,key2=key2,host1=host1,host2=host2)
     
-
-
-
+    def query_customer_page_list(self,params:dict) ->ResponseBaseDTO:
+        port_url = '/ShiXinCustomerCon/queryCustomerPageList'
+        return self.base_req(port_url,params)
+    
+    def scrm_query_simple_customer_page_list(self,params:dict)->ResponseBaseDTO:
+        post_url  = '/scrmCustomerApiCon/querySimpleCustomerPageList'
+        return self.base_req(post_url,params)
+        ...
+    def scrm_query_customer_page_list(self,params:dict)->ResponseBaseDTO:
+        post_url  = '/scrmCustomerApiCon/queryCustomerPageList'
+        return self.base_req(post_url,params)
+    def query_visit_list(self,params:dict)->ResponseBaseDTO:
+        post_url  = '/ShiXinVisitCon/queryVisitList'
+        return self.base_req(post_url,params)
 def main():
     client = TangLangClient()
-    post_url = '/ShiXinCustomerCon/queryCustomerByIdOrPhone'
-    params = {
-        'phone' : '13790137950'
-    }
-    res = client.base_req(post_url, params)
+    # timestamp = client.create_timestamp()
+    # params = {
+    #     'startTime' : '2025-03-01 00:00:00',
+    #     'endTime':'2025-03-31 23:59:58',
+    #     'pageNum':1,
+    #     'pageSize':100,
+    #     'time':timestamp,
+    #     'token':client.create_token(timestamp,client.create_key_choice(key='key2')),
+    #     'companyId':'2808'
+    # }
+    # url = 'https://api8.bjmantis.cn/api'+'/ShiXinCustomerCon/queryCustomerPageList'
+    # res = client.test_base_req(url,params)
     
-    print(res.to_dict())
+    # print(f'token:{client.create_token(1743651061736,KeyChoice(data='key2'))}')
+    # print(res.to_dict())
+    
+    params_n = {
+        'createStartTime' : '2025-04-01 00:00:00',
+        'createEndTime':'2025-04-03 14:46:04',
+        'pageNum':1,
+        'pageSize':1000,
+        
+    }
+    rsp_n = client.query_customer_page_list(params_n)
+    print(rsp_n.to_dict())
+    # print(len(rsp_n.to_dict()['data']))
 
 if __name__ == "__main__":
     main()
