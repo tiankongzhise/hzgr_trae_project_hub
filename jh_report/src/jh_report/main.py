@@ -21,14 +21,16 @@ def get_url_list()->list[str]:
     return url_list 
 
 def format_date(excel_date:int) -> datetime.date:
-        # Excel的基准日期是1900-1-1（Windows版）
-    # 注意：Excel错误地将1900年视为闰年，所以需要调整
-    if excel_date > 59:
-        excel_date -= 1  # 调整1900年2月29日的错误
-    
-    base_date = datetime(1899, 12, 30)
-    delta = timedelta(days=excel_date)
-    result_date = base_date + delta
+    """
+    将Excel天数转换为日期
+    Excel的日期系统从1900年1月1日开始(Windows版本)
+    注意: Excel错误地将1900年认为是闰年，所以1900年3月1日前的日期需要调整
+    """
+    if excel_date < 60:
+        # 调整Excel的1900年闰年错误
+        result_date = datetime(1899, 12, 31) + timedelta(days=excel_date)
+    else:
+        result_date = datetime(1899, 12, 30) + timedelta(days=excel_date)
     return result_date.strftime('%Y-%m-%d')  # 格式化为YYYY MM DD
 def get_db_data()->dict:
     db_data_map = {}

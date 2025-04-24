@@ -4,7 +4,7 @@ from sqlalchemy.schema import UniqueConstraint
 
 
 class JhCostTable(Base):
-    __tablename__ = 'jh_cost'
+    __tablename__ = 'jh_cost1'
     __table_args__ = (
         UniqueConstraint('date', 'channel', name='uq_date_channel'),
         {
@@ -24,4 +24,22 @@ class JhCostTable(Base):
     created_at = Column(DateTime,default=func.now(),comment='记录创建时间')
     updated_at = Column(DateTime,onupdate=func.now(),comment='记录更新时间')
     
-    
+
+class JhCostNewTable(Base):
+    __tablename__ = 'jh_cost_new'
+    __table_args__ = (
+        UniqueConstraint('date', 'channel','sub_channel', name='uq_date_channel_sub_channel'),
+        {
+        'mysql_engine': 'InnoDB',
+        'mysql_charset': 'utf8mb4',
+        'mysql_collate': 'utf8mb4_0900_ai_ci',
+        'mysql_row_format': 'DYNAMIC',
+        'schema': 'jh_data'
+    })
+    id = Column(Integer, primary_key=True, autoincrement=True, comment='主键ID')
+    date = Column(Date,  comment='消费日期')
+    cost = Column(DECIMAL(10,2), comment='消费金额')
+    channel = Column(String(255), comment='投放渠道')
+    sub_channel = Column(String(255), comment='投放子渠道')
+    created_at = Column(DateTime,default=func.now(),comment='记录创建时间')
+    updated_at = Column(DateTime,onupdate=func.now(),comment='记录更新时间')

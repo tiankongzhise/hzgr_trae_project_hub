@@ -1,5 +1,11 @@
-from src.jh_report.main import format_date
+from src.jh_report.api.query import query
 
 
 if __name__ == "__main__":
-    print(format_date(45747))
+    start_date = '2025-01-01'
+    end_date = '2025-04-24'
+    school = ''
+    channel = ''
+    sub_channel = ''
+    rsp = query(start_date,end_date,school,channel,sub_channel)
+    print(rsp.json())
