@@ -6,5 +6,5 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "requests>=2.32.3",
-    "tkzs-bd-ads-db-tool>=0.2.3",
+    "tkzs-bd-ads-db-tool>=0.2.4",
 ]

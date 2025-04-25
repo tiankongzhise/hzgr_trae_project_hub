@@ -28,7 +28,7 @@ class JhCostTable(Base):
 class JhCostNewTable(Base):
     __tablename__ = 'jh_cost_new'
     __table_args__ = (
-        UniqueConstraint('date', 'channel','sub_channel', name='uq_date_channel_sub_channel'),
+        UniqueConstraint('date', 'channel','sub_channel','school', name='uq_date_channel_sub_channel_school'),
         {
         'mysql_engine': 'InnoDB',
         'mysql_charset': 'utf8mb4',
@@ -36,10 +36,14 @@ class JhCostNewTable(Base):
         'mysql_row_format': 'DYNAMIC',
         'schema': 'jh_data'
     })
-    id = Column(Integer, primary_key=True, autoincrement=True, comment='主键ID')
+    key_id = Column(Integer, primary_key=True, autoincrement=True, comment='主键ID')
     date = Column(Date,  comment='消费日期')
     cost = Column(DECIMAL(10,2), comment='消费金额')
+    school = Column(String(255), comment='校区')
     channel = Column(String(255), comment='投放渠道')
     sub_channel = Column(String(255), comment='投放子渠道')
     created_at = Column(DateTime,default=func.now(),comment='记录创建时间')
     updated_at = Column(DateTime,onupdate=func.now(),comment='记录更新时间')
+    
+    def get(self, key, default=None):
+        return getattr(self, key, default)
