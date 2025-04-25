@@ -1,6 +1,6 @@
 from tkzs_bd_db_tool import get_session,init_db
-from .models import JhCostNewTable
-from ..utils import format_db_query_data
+from .models import JhCostNewTable,CardTable,VisitTable,SignUpTable
+from ..utils import format_db_query_data,process_objects_with_conflicts
 
 class DbClient(object):
     def __init__(self):
@@ -21,3 +21,32 @@ class DbClient(object):
             print(e)
             return False
         
+    def insert_jh_card_table(self,item_list:list):
+        try:
+            with get_session() as session:
+                new_card_datas = process_objects_with_conflicts(session,CardTable,[CardTable(item) for item in item_list])
+                session.bulk_save_objects(new_card_datas)
+            return True
+        except Exception as e:
+            print(e)
+            return False
+    
+    def insert_jh_visit_table(self,item_list:list):
+        try:
+            with get_session() as session:
+                new_visit_datas = process_objects_with_conflicts(session,VisitTable,[VisitTable(item) for item in item_list])
+                session.bulk_save_objects(new_visit_datas)
+            return True
+        except Exception as e:
+            print(e)
+            return False
+    
+    def insert_jh_sign_up_table(self,item_list:list):
+        try:
+            with get_session() as session:
+                new_sign_up_datas = process_objects_with_conflicts(session,SignUpTable,[SignUpTable(item) for item in item_list])
+                session.bulk_save_objects(new_sign_up_datas)
+            return True
+        except Exception as e:
+            print(e)
+            return False
