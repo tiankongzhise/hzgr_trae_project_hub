@@ -4,6 +4,7 @@ from typing import Any
 from datetime import date
 from .database.models import JhCostNewTable,UniqueConstraint
 from collections import defaultdict
+from sqlalchemy import and_,or_
 def safe_compare(a, b)-> bool:
     if not isinstance(a, Decimal):
         a = Decimal(str(a))
@@ -116,9 +117,70 @@ def get_unique_constraints(model):
     
     return constraints
 
+# def filter_unique_conflicts(session, model, object_list):
+#     """
+#     过滤掉违反唯一约束的对象，保留第一个出现的对象
+    
+#     :param session: SQLAlchemy session
+#     :param model: ORM 模型类
+#     :param object_list: 待检查的对象列表
+#     :return: (保留的对象列表, 冲突的对象列表)
+#     """
+#     # 获取模型的所有唯一约束
+#     unique_constraints = get_unique_constraints(model)
+    
+#     # 如果没有唯一约束，直接返回原始列表
+#     if not unique_constraints:
+#         return object_list, []
+    
+#     # 用于存储已存在的唯一键组合
+#     seen_keys = defaultdict(list)
+#     kept_objects = []
+#     conflict_objects = []
+    
+#     for obj in object_list:
+#         is_conflict = False
+        
+#         # 检查每个唯一约束
+#         for constraint in unique_constraints:
+#             # 获取当前对象的约束键值组合
+#             key_parts = []
+#             for col_name in constraint.get('columns'):
+#                 col_value = getattr(obj, col_name)
+#                 key_parts.append(f"{col_name}={col_value}")
+            
+#             constraint_key = tuple(key_parts)
+            
+#             # 检查是否已存在相同键值
+#             if constraint_key in seen_keys[constraint.get('name')]:
+#                 is_conflict = True
+#                 break
+            
+#             # 检查数据库中是否已存在
+#             filters = []
+#             for col_name in constraint['columns']:
+#                 col_value = getattr(obj, col_name)
+#                 if col_value is None:
+#                     filters.append(getattr(model, col_name).is_(None))
+#                 else:
+#                     filters.append(getattr(model, col_name) == col_value)
+#             if session.query(model).filter(*filters).first():
+#                 is_conflict = True
+#                 break
+            
+#             # 标记为已存在
+#             seen_keys[constraint['name']].append(constraint_key)
+        
+#         if is_conflict:
+#             conflict_objects.append(obj)
+#         else:
+#             kept_objects.append(obj)
+    
+#     return kept_objects, conflict_objects
+
 def filter_unique_conflicts(session, model, object_list):
     """
-    过滤掉违反唯一约束的对象，保留第一个出现的对象
+    优化后的去重方法，批量处理唯一约束冲突检查
     
     :param session: SQLAlchemy session
     :param model: ORM 模型类
@@ -132,43 +194,74 @@ def filter_unique_conflicts(session, model, object_list):
     if not unique_constraints:
         return object_list, []
     
-    # 用于存储已存在的唯一键组合
-    seen_keys = defaultdict(list)
+    # 用于存储已存在的唯一键组合（内存中和数据库中的）
+    seen_keys = defaultdict(lambda: defaultdict(set))
     kept_objects = []
     conflict_objects = []
     
+    # 先收集所有需要检查的唯一键组合
+    all_constraint_values = defaultdict(list)
+    
+    for obj in object_list:
+        for constraint in unique_constraints:
+            key_values = tuple(getattr(obj, col_name) for col_name in constraint['columns'])
+            all_constraint_values[constraint['name']].append((obj, key_values))
+    
+    # 批量查询数据库检查已存在的记录
+    db_existing_keys = defaultdict(set)
+    
+    for constraint in unique_constraints:
+        # 收集所有需要检查的值组合
+        value_combinations = set()
+        for obj, key_values in all_constraint_values[constraint['name']]:
+            value_combinations.add(key_values)
+        
+        if not value_combinations:
+            continue
+            
+        # 构建批量查询条件
+        conditions = []
+        for values in value_combinations:
+            condition_parts = []
+            for col_name, value in zip(constraint['columns'], values):
+                if value is None:
+                    condition_parts.append(getattr(model, col_name).is_(None))
+                else:
+                    condition_parts.append(getattr(model, col_name) == value)
+            conditions.append(and_(*condition_parts))
+        
+        # 执行批量查询
+        query = session.query(model)
+        if len(conditions) == 1:
+            query = query.filter(conditions[0])
+        else:
+            query = query.filter(or_(*conditions))
+        
+        # 获取数据库中已存在的键组合
+        for record in query:
+            key = tuple(getattr(record, col_name) for col_name in constraint['columns'])
+            db_existing_keys[constraint['name']].add(key)
+    
+    # 第二次遍历检查冲突
     for obj in object_list:
         is_conflict = False
         
-        # 检查每个唯一约束
         for constraint in unique_constraints:
             # 获取当前对象的约束键值组合
-            key_parts = []
-            for col_name in constraint.get('columns'):
-                col_value = getattr(obj, col_name)
-                key_parts.append(f"{col_name}={col_value}")
+            key_values = tuple(getattr(obj, col_name) for col_name in constraint['columns'])
             
-            constraint_key = tuple(key_parts)
-            
-            # 检查是否已存在相同键值
-            if constraint_key in seen_keys[constraint.get('name')]:
+            # 检查内存中是否已存在
+            if key_values in seen_keys[constraint['name']]['memory']:
                 is_conflict = True
                 break
-            
+                
             # 检查数据库中是否已存在
-            filters = []
-            for col_name in constraint['columns']:
-                col_value = getattr(obj, col_name)
-                if col_value is None:
-                    filters.append(getattr(model, col_name).is_(None))
-                else:
-                    filters.append(getattr(model, col_name) == col_value)
-            if session.query(model).filter(*filters).first():
+            if key_values in db_existing_keys[constraint['name']]:
                 is_conflict = True
                 break
             
-            # 标记为已存在
-            seen_keys[constraint['name']].append(constraint_key)
+            # 标记为已存在（内存中）
+            seen_keys[constraint['name']]['memory'].add(key_values)
         
         if is_conflict:
             conflict_objects.append(obj)
