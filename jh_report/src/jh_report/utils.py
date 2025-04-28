@@ -144,14 +144,14 @@ def filter_unique_conflicts(session, model, object_list):
         for constraint in unique_constraints:
             # 获取当前对象的约束键值组合
             key_parts = []
-            for col_name in constraint.columns:
+            for col_name in constraint.get('columns'):
                 col_value = getattr(obj, col_name)
                 key_parts.append(f"{col_name}={col_value}")
             
             constraint_key = tuple(key_parts)
             
             # 检查是否已存在相同键值
-            if constraint_key in seen_keys[constraint.name]:
+            if constraint_key in seen_keys[constraint.get('name')]:
                 is_conflict = True
                 break
             
@@ -168,7 +168,7 @@ def filter_unique_conflicts(session, model, object_list):
                 break
             
             # 标记为已存在
-            seen_keys[constraint.name].append(constraint_key)
+            seen_keys[constraint['name']].append(constraint_key)
         
         if is_conflict:
             conflict_objects.append(obj)
@@ -179,12 +179,13 @@ def filter_unique_conflicts(session, model, object_list):
 
 # 使用示例
 def process_objects_with_conflicts(session, model, objects):
+    print('正在对数据进行预处理,去除冲突对象')
     kept, conflicts = filter_unique_conflicts(session, model, objects)
     
     # 打印冲突警告
     for obj in conflicts:
         print(f"WARNING: 发现冲突对象 - {obj}")
-    
+    print('数据预处理完成')
     # 返回保留的对象
     return kept
         
