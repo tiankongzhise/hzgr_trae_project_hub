@@ -25,7 +25,9 @@ class DbClient(object):
         try:
             with get_session() as session:
                 new_card_datas = process_objects_with_conflicts(session,CardTable,[CardTable(item) for item in item_list])
-                session.bulk_save_objects(new_card_datas)
+                new_card_dict = [item.to_dict() for item in new_card_datas]
+                # session.bulk_save_objects(new_card_datas)
+                session.bulk_insert_mappings(CardTable, new_card_dict)
             return True
         except Exception as e:
             print(e)
@@ -35,7 +37,9 @@ class DbClient(object):
         try:
             with get_session() as session:
                 new_visit_datas = process_objects_with_conflicts(session,VisitTable,[VisitTable(item) for item in item_list])
-                session.bulk_save_objects(new_visit_datas)
+                new_visit_dict = [item.to_dict() for item in new_visit_datas]
+                session.bulk_insert_mappings(VisitTable, new_visit_dict)
+                # session.bulk_save_objects(new_visit_datas)
             return True
         except Exception as e:
             print(e)
@@ -45,7 +49,9 @@ class DbClient(object):
         try:
             with get_session() as session:
                 new_sign_up_datas = process_objects_with_conflicts(session,SignUpTable,[SignUpTable(item) for item in item_list])
-                session.bulk_save_objects(new_sign_up_datas)
+                new_sign_up_dict = [item.to_dict() for item in new_sign_up_datas]
+                session.bulk_insert_mappings(SignUpTable, new_sign_up_dict)
+                # session.bulk_save_objects(new_sign_up_datas)
             return True
         except Exception as e:
             print(e)

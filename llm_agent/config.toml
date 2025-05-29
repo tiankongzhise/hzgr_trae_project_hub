@@ -1,0 +1,35 @@
+[app]
+name = "recruitment-analyzer"
+version = "0.1.0"
+debug = false
+
+[scraper]
+base_url = "https://cs.bendibao.com/job/202525/124791.shtm"
+request_timeout = 30
+max_concurrent_requests = 5
+user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+
+[llm]
+max_tokens = 4000
+temperature = 0.1
+timeout = 60
+max_retries = 3
+
+[database]
+pool_size = 10
+max_overflow = 20
+pool_timeout = 30
+pool_recycle = 3600
+
+[logging]
+format = "{time:YYYY-MM-DD HH:mm:ss} | {level} | {name}:{function}:{line} | {message}"
+rotation = "1 day"
+retention = "30 days"
+compression = "gz"
+
+[monitoring]
+enable_performance_tracking = true
+log_function_calls = true
+log_execution_time = true
+log_parameters = false
+log_return_values = false

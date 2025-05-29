@@ -8,8 +8,8 @@ def run():
     print('请输入需要获取的年份(默认2025):')
     year = str(input()) or '2025'
     
-    if int(year) < 2023:
-        print('仅支持2023年及以后年份,输入错误,请重新输入!')
+    if int(year) < 2010:
+        print('仅支持2010年及以后年份,输入错误,请重新输入!')
         return False
     db_client = DbClient()
     print(f'开始读取{year}年的线索数据')

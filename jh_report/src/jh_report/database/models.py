@@ -131,6 +131,14 @@ class CardTable(Base):
             return datetime.strptime(time_str, '%Y-%m-%d%H:%M:%S')
         except ValueError:
             return None
+    
+    def to_dict(self):
+        special_key = ['key_id','create_at','update_at']
+        temp = {c.name: getattr(self, c.name) for c in self.__table__.columns}
+        for key in special_key:
+            if key in temp:
+                del temp[key]
+            return temp
 
     def __repr__(self):
         return f"<CardTable(name='{self.name}', customer_id='{self.customer_id}')>"
@@ -211,7 +219,13 @@ class VisitTable(Base):
         except ValueError as e:
             print(f"时间格式解析错误: {time_str}, 错误: {str(e)}")
             return None
-
+    def to_dict(self):
+        special_key = ['id','create_at','update_at']
+        temp = {c.name: getattr(self, c.name) for c in self.__table__.columns}
+        for key in special_key:
+            if key in temp:
+                del temp[key]
+            return temp
     def __repr__(self):
         return f"<CampusVisitRecord(name='{self.name}', customer_id='{self.customer_id}', visit_time='{self.visit_time}')>"
 
@@ -301,7 +315,13 @@ class SignUpTable(Base):
         except ValueError as e:
             print(f"时间格式解析错误: {time_str}, 错误: {str(e)}")
             return None
-
+    def to_dict(self):
+        special_key = ['key_id','create_at','update_at']
+        temp = {c.name: getattr(self, c.name) for c in self.__table__.columns}
+        for key in special_key:
+            if key in temp:
+                del temp[key]
+            return temp
     def __repr__(self):
         return (f"<SignUpTable(name='{self.name}', "
                 f"course='{self.enrolled_course}', "
