@@ -1,6 +1,11 @@
 @echo off
-chcp 65001 >nul
+:: 设置控制台编码为UTF-8
+chcp 65001 >nul 2>&1
 setlocal enabledelayedexpansion
+
+:: 设置控制台字体和颜色
+color 0A
+title 招生简章解析项目
 
 echo ========================================
 echo 招生简章解析项目运行脚本

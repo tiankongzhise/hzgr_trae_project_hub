@@ -15,6 +15,7 @@ from ..models.schemas import ScrapingResult
 from ..utils.decorators import monitor_performance, retry_on_failure
 from ..utils.logger import get_logger
 from ..utils.retry import retry_network_request
+from ..utils.document_processor import get_document_processor
 
 logger = get_logger(__name__)
 
@@ -179,33 +180,21 @@ class RecruitmentScraper:
         path = Path(file_path)
         
         try:
-            if path.suffix.lower() == '.pdf':
-                # PDF文件需要使用专门的库来解析，这里简化处理
-                logger.warning(f"PDF文件 {file_path} 需要专门的解析库，暂时跳过")
+            # 使用新的文档处理器
+            document_processor = get_document_processor()
+            
+            if not document_processor.is_supported(file_path):
+                logger.warning(f"不支持的文件格式: {file_path}")
                 return None
             
-            elif path.suffix.lower() in ['.html', '.htm']:
-                # HTML文件
-                async with aiofiles.open(file_path, 'r', encoding='utf-8') as f:
-                    html_content = await f.read()
-                
-                soup = BeautifulSoup(html_content, 'lxml')
-                # 移除脚本和样式标签
-                for script in soup(["script", "style"]):
-                    script.decompose()
-                
-                text = soup.get_text()
-                # 清理文本
-                lines = (line.strip() for line in text.splitlines())
-                chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
-                text = '\n'.join(chunk for chunk in chunks if chunk)
-                
-                return text
+            text = await document_processor.extract_text_from_file(file_path)
             
+            if text:
+                logger.info(f"成功提取文件文本: {file_path.name}，长度: {len(text)}")
+                return text
             else:
-                # 文本文件
-                async with aiofiles.open(file_path, 'r', encoding='utf-8') as f:
-                    return await f.read()
+                logger.warning(f"文件文本提取为空: {file_path}")
+                return None
                     
         except Exception as e:
             logger.error(f"提取文件 {file_path} 的文本内容失败: {e}")
@@ -339,8 +328,10 @@ class RecruitmentScraper:
         """获取已保存的招生简章文件列表"""
         try:
             files = []
+            document_processor = get_document_processor()
+            
             for file_path in self.data_dir.iterdir():
-                if file_path.is_file() and file_path.suffix in ['.txt', '.html', '.pdf', '.doc']:
+                if file_path.is_file() and document_processor.is_supported(file_path):
                     files.append(file_path)
             
             logger.info(f"找到 {len(files)} 个已保存的招生简章文件")

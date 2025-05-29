@@ -101,9 +101,21 @@ class Settings(BaseModel):
             toml_config = toml.load(CONFIG_FILE)
         
         # 从环境变量和TOML配置构建配置
+        # 构建MySQL数据库连接字符串
+        db_host = os.getenv("DATABASE_HOST", "localhost")
+        db_port = os.getenv("DATABASE_PORT", "3306")
+        db_name = os.getenv("DATABASE_NAME", "recruitment_db")
+        db_user = os.getenv("DATABASE_USER", "root")
+        db_password = os.getenv("DATABASE_PASSWORD", "")
+        
+        # 如果有完整的DATABASE_URL则使用，否则构建MySQL连接字符串
+        database_url = os.getenv("DATABASE_URL")
+        if not database_url or "postgresql" in database_url:
+            database_url = f"mysql+aiomysql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}?charset=utf8mb4"
+        
         config_data = {
             "database": {
-                "url": os.getenv("DATABASE_URL", ""),
+                "url": database_url,
                 "pool_size": toml_config.get("database", {}).get("pool_size", 10),
                 "max_overflow": toml_config.get("database", {}).get("max_overflow", 20),
                 "pool_timeout": toml_config.get("database", {}).get("pool_timeout", 30),

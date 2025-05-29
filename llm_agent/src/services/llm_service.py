@@ -1,5 +1,6 @@
 """LLM服务模块"""
 
+import asyncio
 import json
 import time
 from typing import Optional, Dict, Any, List
@@ -26,16 +27,32 @@ class LLMService:
     def __init__(self):
         self.settings = get_settings()
         self.client: Optional[AsyncOpenAI] = None
-        self._init_client()
     
-    def _init_client(self):
+    async def __aenter__(self):
+        """异步上下文管理器入口"""
+        await self._init_client()
+        return self
+    
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """异步上下文管理器出口"""
+        await self._close_client()
+    
+    async def _init_client(self):
         """初始化OpenAI客户端"""
-        self.client = AsyncOpenAI(
-            base_url=self.settings.llm.base_url,
-            api_key=self.settings.llm.api_key,
-            timeout=self.settings.llm.timeout,
-        )
-        logger.info("LLM客户端已初始化")
+        if self.client is None:
+            self.client = AsyncOpenAI(
+                base_url=self.settings.llm.base_url,
+                api_key=self.settings.llm.api_key,
+                timeout=self.settings.llm.timeout,
+            )
+            logger.info("LLM客户端已初始化")
+    
+    async def _close_client(self):
+        """关闭OpenAI客户端"""
+        if self.client:
+            await self.client.close()
+            self.client = None
+            logger.info("LLM客户端已关闭")
     
     def _build_analysis_prompt(self, content: str, school_name: Optional[str] = None) -> str:
         """构建分析提示词"""
@@ -93,6 +110,9 @@ class LLMService:
         start_time = time.time()
         
         try:
+            # 确保客户端已初始化
+            await self._init_client()
+            
             # 构建提示词
             prompt = self._build_analysis_prompt(request.content, request.school_name)
             
@@ -129,6 +149,10 @@ class LLMService:
                 json_str = json_str.strip()
                 
                 parsed_data = json.loads(json_str)
+                
+                # 处理advantage_majors字段：如果是数组，转换为逗号分隔的字符串
+                if 'advantage_majors' in parsed_data and isinstance(parsed_data['advantage_majors'], list):
+                    parsed_data['advantage_majors'] = ', '.join(parsed_data['advantage_majors'])
                 
                 # 添加原始内容和来源URL
                 parsed_data['raw_content'] = request.content

@@ -4,11 +4,11 @@ import asyncio
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 
-from sqlalchemy import select, update, delete, and_, or_
+from sqlalchemy import select, update, delete, and_, or_, text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..models.database import School, get_session
+from ..models.database import School, get_session, create_tables as db_create_tables, get_engine
 from ..models.schemas import (
     SchoolCreate,
     SchoolUpdate,
@@ -27,6 +27,30 @@ class DatabaseService:
     
     def __init__(self):
         self.error_logger = DatabaseErrorLogger()
+    
+    async def __aenter__(self):
+        """异步上下文管理器入口"""
+        return self
+    
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """异步上下文管理器出口"""
+        # 清理资源（如果需要）
+        pass
+    
+    async def test_connection(self):
+        """测试数据库连接"""
+        try:
+            engine = get_engine()
+            async with engine.begin() as conn:
+                await conn.execute(text("SELECT 1"))
+            logger.info("数据库连接测试成功")
+        except Exception as e:
+            logger.error(f"数据库连接测试失败: {e}")
+            raise
+    
+    async def create_tables(self):
+        """创建数据库表"""
+        await db_create_tables()
     
     @monitor_performance()
     @database_operation("create_school")
