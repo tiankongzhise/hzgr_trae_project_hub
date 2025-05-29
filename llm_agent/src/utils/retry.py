@@ -217,22 +217,35 @@ class NetworkRetry(AsyncRetry):
     """网络请求专用重试器"""
     
     def __init__(self, config: Optional[RetryConfig] = None):
+        # 导入httpx异常
+        try:
+            import httpx
+            httpx_exceptions = (
+                httpx.ConnectError,
+                httpx.TimeoutException,
+                httpx.NetworkError,
+            )
+        except ImportError:
+            httpx_exceptions = ()
+        
         # 网络相关的可重试异常
         retry_exceptions = (
             ConnectionError,
             TimeoutError,
             OSError,
-            # httpx相关异常
-            # httpx.ConnectError,
-            # httpx.TimeoutException,
-            # httpx.NetworkError,
-        )
+        ) + httpx_exceptions
         
         # 网络相关的不可重试异常
         stop_exceptions = (
-            # httpx.HTTPStatusError,  # HTTP状态错误（如404, 401等）
             ValueError,  # 参数错误
         )
+        
+        # 添加httpx HTTP状态错误到不可重试异常（如果可用）
+        try:
+            import httpx
+            stop_exceptions = stop_exceptions + (httpx.HTTPStatusError,)
+        except ImportError:
+            pass
         
         super().__init__(
             config=config or RetryConfig(max_attempts=3, base_delay=1.0, max_delay=10.0),

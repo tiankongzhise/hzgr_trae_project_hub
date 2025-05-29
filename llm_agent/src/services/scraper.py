@@ -44,6 +44,30 @@ class RecruitmentScraper:
     async def _init_client(self):
         """初始化HTTP客户端"""
         if self.client is None:
+            import ssl
+            import os
+            
+            # 设置OpenSSL配置以降低安全级别
+            os.environ['OPENSSL_CONF'] = ''
+            
+            # 创建更宽松的SSL上下文
+            ssl_context = ssl.create_default_context()
+            ssl_context.check_hostname = False
+            ssl_context.verify_mode = ssl.CERT_NONE
+            
+            # 设置更宽松的加密套件和协议
+            try:
+                ssl_context.set_ciphers('ALL:@SECLEVEL=0')
+            except ssl.SSLError:
+                try:
+                    ssl_context.set_ciphers('DEFAULT:@SECLEVEL=1')
+                except ssl.SSLError:
+                    ssl_context.set_ciphers('DEFAULT')
+            
+            # 启用所有协议版本
+            ssl_context.minimum_version = ssl.TLSVersion.SSLv3
+            ssl_context.maximum_version = ssl.TLSVersion.TLSv1_3
+            
             self.client = httpx.AsyncClient(
                 timeout=self.settings.scraper.request_timeout,
                 headers={
@@ -54,8 +78,9 @@ class RecruitmentScraper:
                     "Connection": "keep-alive",
                 },
                 follow_redirects=True,
+                verify=ssl_context,  # 使用自定义SSL上下文
             )
-            logger.info("HTTP客户端已初始化")
+            logger.info("HTTP客户端已初始化（使用宽松SSL配置）")
     
     async def _close_client(self):
         """关闭HTTP客户端"""
