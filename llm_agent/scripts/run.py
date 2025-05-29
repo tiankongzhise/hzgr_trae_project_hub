@@ -43,7 +43,7 @@ class ProjectRunner:
         try:
             async with RecruitmentProcessor() as processor:
                 # 仅爬取，不分析
-                scrape_results = await processor.scrape_recruitment_documents(url)
+                scrape_results = await processor.scrape_recruitment_documents()
                 
                 successful = sum(1 for r in scrape_results if r.get('success', False))
                 failed = len(scrape_results) - successful
@@ -83,13 +83,13 @@ class ProjectRunner:
             logger.error(f"分析任务失败: {e}")
             return {'success': False, 'error': str(e)}
     
-    async def run_full_pipeline(self, url: str):
+    async def run_full_pipeline(self):
         """运行完整流水线"""
-        logger.info(f"开始完整流水线: {url}")
+        logger.info("开始完整流水线")
         
         try:
             async with RecruitmentProcessor() as processor:
-                result = await processor.process_from_url(url)
+                result = await processor.process_from_url()
                 
                 if result['success']:
                     logger.info("完整流水线执行成功")
@@ -235,7 +235,7 @@ async def main():
                 sys.exit(1)
                 
         elif args.command == "full":
-            result = await runner.run_full_pipeline(args.url)
+            result = await runner.run_full_pipeline()
             if not result['success']:
                 sys.exit(1)
                 

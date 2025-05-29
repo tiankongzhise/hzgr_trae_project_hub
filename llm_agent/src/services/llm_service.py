@@ -1,9 +1,10 @@
 """LLM服务模块"""
 
+# 导入asyncio（在文件顶部添加）
 import asyncio
 import json
 import time
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Callable
 
 from openai import AsyncOpenAI
 from pydantic import ValidationError
@@ -69,7 +70,6 @@ class LLMService:
 7. 是否是示范性院校（布尔值）
 8. 是否是骨干院校（布尔值）
 9. 是否是卓越院校（布尔值）
-10. 是否是楚怡高水平院校（布尔值）
 11. 优势专业（列出主要的优势专业）
 12. 优势专业判断依据（说明为什么这些是优势专业）
 
@@ -240,20 +240,52 @@ class LLMService:
         return round(normalized_confidence, 2)
     
     @monitor_performance()
-    async def batch_analyze(self, requests: List[LLMAnalysisRequest]) -> List[LLMAnalysisResponse]:
-        """批量分析招生简章"""
+    async def batch_analyze(self, requests: List[LLMAnalysisRequest], 
+                          progress_callback: Optional[Callable[[Dict[str, Any]], None]] = None) -> List[LLMAnalysisResponse]:
+        """批量分析招生简章
+        
+        Args:
+            requests: 分析请求列表
+            progress_callback: 进度回调函数，接收进度信息字典
+        """
         results = []
+        start_time = time.time()
+        
+        # 初始化进度信息
+        progress_info = {
+            'total_tasks': len(requests),
+            'submitted_tasks': 0,
+            'completed_tasks': 0,
+            'successful_tasks': 0,
+            'failed_tasks': 0,
+            'current_task': '',
+            'total_time': 0.0,
+            'average_time_per_task': 0.0,
+            'estimated_remaining_time': 0.0
+        }
+        
+        # 发送初始进度
+        if progress_callback:
+            progress_callback(progress_info.copy())
         
         for i, request in enumerate(requests):
+            task_start_time = time.time()
+            
+            # 更新当前任务信息
+            progress_info['submitted_tasks'] = i + 1
+            progress_info['current_task'] = request.school_name or f'任务{i+1}'
+            
+            if progress_callback:
+                progress_callback(progress_info.copy())
+            
             try:
                 logger.info(f"正在分析第 {i+1}/{len(requests)} 个招生简章: {request.school_name or '未知学校'}")
                 result = await self.analyze_recruitment_content(request)
                 results.append(result)
                 
-                # 添加延迟以避免API限流
-                if i < len(requests) - 1:  # 不是最后一个
-                    await asyncio.sleep(0.5)
-                    
+                # 更新成功任务计数
+                progress_info['successful_tasks'] += 1
+                
             except Exception as e:
                 logger.error(f"分析第 {i+1} 个招生简章失败: {e}")
                 # 创建一个失败的响应
@@ -267,6 +299,34 @@ class LLMService:
                     analysis_time=0.0,
                 )
                 results.append(error_response)
+                
+                # 更新失败任务计数
+                progress_info['failed_tasks'] += 1
+            
+            # 更新完成任务计数和时间统计
+            task_time = time.time() - task_start_time
+            progress_info['completed_tasks'] = i + 1
+            progress_info['total_time'] = time.time() - start_time
+            
+            if progress_info['completed_tasks'] > 0:
+                progress_info['average_time_per_task'] = progress_info['total_time'] / progress_info['completed_tasks']
+                remaining_tasks = progress_info['total_tasks'] - progress_info['completed_tasks']
+                progress_info['estimated_remaining_time'] = remaining_tasks * progress_info['average_time_per_task']
+            
+            # 发送进度更新
+            if progress_callback:
+                progress_callback(progress_info.copy())
+            
+            # 添加延迟以避免API限流
+            if i < len(requests) - 1:  # 不是最后一个
+                await asyncio.sleep(0.5)
+        
+        # 最终进度更新
+        progress_info['total_time'] = time.time() - start_time
+        progress_info['estimated_remaining_time'] = 0.0
+        
+        if progress_callback:
+            progress_callback(progress_info.copy())
         
         successful = sum(1 for r in results if r.confidence > 0)
         logger.info(f"批量分析完成: 成功 {successful}/{len(requests)} 个")
@@ -325,7 +385,3 @@ class LLMService:
         if self.client:
             await self.client.close()
             logger.info("LLM客户端已关闭")
-
-
-# 导入asyncio（在文件顶部添加）
-import asyncio

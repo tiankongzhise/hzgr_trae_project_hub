@@ -4,7 +4,7 @@
 import asyncio
 import sys
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional, Callable
 from datetime import datetime
 
 from src.config import get_settings
@@ -38,23 +38,37 @@ class RecruitmentProcessor:
         await self.llm_service.close()
     
     @monitor_performance()
-    async def scrape_recruitment_documents(self, url: str) -> List[Dict[str, Any]]:
+    async def scrape_recruitment_documents(self) -> List[Dict[str, Any]]:
         """爬取招生简章文档"""
-        logger.info(f"开始爬取招生简章: {url}")
+        logger.info("开始爬取招生简章")
         
         try:
             # 爬取所有学校的招生简章
-            results = await self.scraper.scrape_all_schools(url)
+            results = await self.scraper.scrape_all_schools()
             
             logger.info(f"爬取完成，共获取 {len(results)} 个学校的招生简章")
             
             # 统计爬取结果
-            successful = sum(1 for r in results if r.get('success', False))
+            successful = sum(1 for r in results if r.success)
             failed = len(results) - successful
             
             logger.info(f"爬取统计: 成功 {successful} 个，失败 {failed} 个")
             
-            return results
+            # 转换为字典格式以保持兼容性
+            result_dicts = []
+            for r in results:
+                result_dict = {
+                    'school_name': r.school_name,
+                    'recruitment_url': r.recruitment_url,
+                    'special_talent_url': r.special_talent_url,
+                    'content': r.content,
+                    'file_path': r.file_path,
+                    'success': r.success,
+                    'error_message': r.error_message,
+                }
+                result_dicts.append(result_dict)
+            
+            return result_dicts
             
         except Exception as e:
             logger.error(f"爬取招生简章失败: {e}")
@@ -120,7 +134,8 @@ class RecruitmentProcessor:
             return 'unknown'
     
     @monitor_performance()
-    async def analyze_documents_with_llm(self, documents: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    async def analyze_documents_with_llm(self, documents: List[Dict[str, Any]], 
+                                       progress_callback: Optional[Callable[[Dict[str, Any]], None]] = None) -> List[Dict[str, Any]]:
         """使用大模型分析招生简章文档"""
         logger.info(f"开始使用大模型分析 {len(documents)} 个文档")
         
@@ -136,21 +151,36 @@ class RecruitmentProcessor:
             analysis_requests.append(request)
         
         try:
-            # 批量分析
+            # 批量分析，传递进度回调
             analysis_results = await self.llm_service.batch_analyze(
                 analysis_requests,
-                batch_size=self.settings.llm.batch_size
+                progress_callback=progress_callback
             )
             
             logger.info(f"大模型分析完成，共处理 {len(analysis_results)} 个文档")
             
             # 统计分析结果
-            successful = sum(1 for r in analysis_results if r.success)
+            successful = sum(1 for r in analysis_results if r.confidence > 0)
             failed = len(analysis_results) - successful
             
             logger.info(f"分析统计: 成功 {successful} 个，失败 {failed} 个")
             
-            return analysis_results
+            # 转换为字典格式以保持兼容性
+            results = []
+            for result in analysis_results:
+                result_dict = {
+                    'success': result.confidence > 0,
+                    'school_info': result.school_info.dict(),
+                    'confidence': result.confidence,
+                    'analysis_time': result.analysis_time,
+                    'original_content': result.school_info.raw_content,
+                    'source_url': result.school_info.source_url,
+                }
+                if result.confidence == 0:
+                    result_dict['error'] = '分析失败'
+                results.append(result_dict)
+            
+            return results
             
         except Exception as e:
             logger.error(f"大模型分析失败: {e}")
@@ -216,15 +246,15 @@ class RecruitmentProcessor:
             raise
     
     @monitor_performance()
-    async def process_from_url(self, url: str) -> Dict[str, Any]:
-        """从URL处理招生简章（完整流程）"""
-        logger.info(f"开始完整处理流程: {url}")
+    async def process_from_url(self, progress_callback: Optional[Callable[[Dict[str, Any]], None]] = None) -> Dict[str, Any]:
+        """处理招生简章（完整流程）"""
+        logger.info("开始完整处理流程")
         
         start_time = datetime.now()
         
         try:
             # 1. 爬取招生简章
-            scrape_results = await self.scrape_recruitment_documents(url)
+            scrape_results = await self.scrape_recruitment_documents()
             
             # 2. 读取本地文档
             documents = await self.read_local_documents()
@@ -237,8 +267,8 @@ class RecruitmentProcessor:
                     'execution_time': (datetime.now() - start_time).total_seconds(),
                 }
             
-            # 3. 大模型分析
-            analysis_results = await self.analyze_documents_with_llm(documents)
+            # 3. 大模型分析（传递进度回调）
+            analysis_results = await self.analyze_documents_with_llm(documents, progress_callback)
             
             # 4. 保存到数据库
             save_stats = await self.save_to_database(analysis_results)
